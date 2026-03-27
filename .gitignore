@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.idea/
+.vscode/
+*.iml
+*.log
+target/
+.DS_Store
+*.class
+*.jar
+*.war
+*.swp
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+

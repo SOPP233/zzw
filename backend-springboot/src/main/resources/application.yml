@@ -1,0 +1,12 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: lw-backend
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/lw_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: lw_user
+    password: lw_pass_123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
