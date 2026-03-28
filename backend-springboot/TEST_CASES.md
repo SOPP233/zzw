@@ -179,3 +179,20 @@ Base URL: `http://localhost:8080`
   2) 更新 `order_detail.detail_status=3`（生产中）
   3) 插入 `plan_detail_relation`
   4) 创建 `process_task` 首道织造任务（`processType=1`, `status=0`）
+
+## 14. 工序报工与状态激活（核心）
+- POST `/api/tasks/{taskId}/complete`
+```json
+{
+  "operatorId": "U001",
+  "outputData": {
+    "actualOutputMeters": 1250.5,
+    "lossRate": 0.018,
+    "remark": "首批报工完成"
+  }
+}
+```
+
+说明：
+- 接口会将当前任务状态更新为已完成（`status=3`），并写入 `output_data`、`end_time`。
+- 若当前任务工序不是最后一道（`process_type < 5`），系统会自动生成下一工序任务，状态为待接收（`status=0`）。

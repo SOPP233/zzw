@@ -63,6 +63,8 @@ npm run dev:mp-weixin
 - 合并排产在更新 `order_detail` 状态前后必须打印日志：
   - `log.info("准备更新明细状态")`
   - `log.info("明细状态更新完成，影响行数: {}", rows)`
+- 工序报工接口路径：`POST /api/tasks/{taskId}/complete`，由 `TaskReportService` 统一处理。
+- 工序报工必须事务化：更新当前任务与激活下一工序在一个事务内提交/回滚。
 
 ## Collaboration Rules
 
