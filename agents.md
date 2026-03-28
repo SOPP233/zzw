@@ -2,11 +2,15 @@
 
 本文件用于规范本仓库内 Agent/开发者协作方式，确保多人并行改动时一致、可追踪、可回滚。
 
+## 强制规则
+
+- 每次代码或配置修改后，必须同步检查并更新 `agents.md`（如变更范围、启动方式、约束、流程有变化）。
+
 ## Project Scope
 
 - `frontend-web`: Vue 3 + Vite（浏览器端）
 - `frontend-uniapp`: uni-app + Vue 3（微信小程序端）
-- `backend-springboot`: Spring Boot 3 后端
+- `backend-springboot`: Spring Boot 3 + MyBatis-Plus
 - `infra`: MySQL Docker Compose
 - `LW.sql`: MySQL 8.0 全量建表脚本（含核心业务表 + RBAC）
 
@@ -43,7 +47,15 @@ npm run dev:mp-weixin
 - 统一以 `LW.sql` 作为结构基线，新增/变更表结构需同步更新该文件。
 - 当前权限模型为 RBAC：`sys_user`、`sys_role`、`sys_menu`、`sys_user_role`、`sys_role_menu`。
 - 密码字段仅允许存储哈希值（`password_hash`），禁止明文密码入库。
-- 涉及订单号、批次号检索的查询，优先复用现有索引设计，不随意删除/弱化索引。
+- 涉及订单号、批次号检索的查询，优先复用现有索引设计，不随意删除或弱化索引。
+
+## Backend Rules
+
+- 实体、Mapper、XML 保持同名同目录分层，统一放在 `com.lw.backend.modules` 下。
+- `process_task.output_data` 必须使用 MyBatis-Plus 的 JSON TypeHandler 映射。
+- 新增 Mapper XML 后，确认 `mybatis-plus.mapper-locations` 覆盖到对应路径。
+- 分页查询统一走 MyBatis-Plus 分页拦截器（`MybatisPlusInterceptor + PaginationInnerInterceptor`）。
+- 客户管理接口基线路径：`/api/customers`（包含增删改查与分页查询）。
 
 ## Collaboration Rules
 
@@ -54,6 +66,7 @@ npm run dev:mp-weixin
 
 ## Commit Checklist
 
-1. `git status` 确认改动范围正确
-2. 本地最小可运行验证（至少启动受影响模块）
-3. 提交并推送到 `origin/main`
+1. `git status` 确认改动范围正确。
+2. 本地最小可运行验证（至少启动受影响模块）。
+3. 更新 `agents.md`（强制检查项）。
+4. 提交并推送到 `origin/main`。

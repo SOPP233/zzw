@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lw.backend.modules.mes.mapper.ProductionPlanMapper">
+
+    <resultMap id="BaseResultMap" type="com.lw.backend.modules.mes.entity.ProductionPlan">
+        <id column="batch_id" property="batchId"/>
+        <result column="machine_id" property="machineId"/>
+        <result column="plan_start_date" property="planStartDate"/>
+        <result column="actual_start_time" property="actualStartTime"/>
+        <result column="plan_status" property="planStatus"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        batch_id, machine_id, plan_start_date, actual_start_time, plan_status, created_by, created_at, updated_at
+    </sql>
+
+</mapper>
+
