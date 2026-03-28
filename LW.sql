@@ -17,6 +17,7 @@ DROP TABLE IF EXISTS `plan_detail_relation`;
 DROP TABLE IF EXISTS `production_plan`;
 DROP TABLE IF EXISTS `order_detail`;
 DROP TABLE IF EXISTS `order_master`;
+DROP TABLE IF EXISTS `contract_master`;
 DROP TABLE IF EXISTS `material_inventory`;
 DROP TABLE IF EXISTS `sys_role_menu`;
 DROP TABLE IF EXISTS `sys_user_role`;
@@ -43,6 +44,28 @@ CREATE TABLE `customer` (
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_0900_ai_ci
   COMMENT='客户主数据表';
+
+CREATE TABLE `contract_master` (
+  `contract_id` VARCHAR(30) NOT NULL COMMENT '合同号（主键）',
+  `customer_id` VARCHAR(64) NOT NULL COMMENT '客户ID（外键）',
+  `contract_amount` DECIMAL(18,2) NOT NULL DEFAULT 0.00 COMMENT '合同总金额',
+  `sign_date` DATE NOT NULL COMMENT '签订日期',
+  `delivery_address` VARCHAR(255) DEFAULT NULL COMMENT '交付地址',
+  `contract_status` TINYINT NOT NULL DEFAULT 1 COMMENT '合同状态：0作废，1生效，2已完成',
+  `remark` VARCHAR(255) DEFAULT NULL COMMENT '备注',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`contract_id`),
+  KEY `idx_contract_master_customer_id` (`customer_id`),
+  KEY `idx_contract_master_status_sign_date` (`contract_status`, `sign_date`),
+  CONSTRAINT `fk_contract_master_customer_id`
+    FOREIGN KEY (`customer_id`) REFERENCES `customer` (`customer_id`)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT `ck_contract_master_status` CHECK (`contract_status` IN (0, 1, 2))
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_0900_ai_ci
+  COMMENT='合同主表（订单录入依据）';
 
 -- -----------------------------
 -- 2. RBAC 权限模型
@@ -151,7 +174,7 @@ CREATE TABLE `sys_role_menu` (
 -- -----------------------------
 CREATE TABLE `order_master` (
   `order_id` VARCHAR(30) NOT NULL COMMENT '订单号（主键，示例：ORD20260327001）',
-  `contract_id` VARCHAR(30) DEFAULT NULL COMMENT '合同编号',
+  `contract_id` VARCHAR(30) NOT NULL COMMENT '合同编号（外键）',
   `customer_id` VARCHAR(64) NOT NULL COMMENT '客户ID（外键）',
   `total_amount` DECIMAL(18,2) NOT NULL DEFAULT 0.00 COMMENT '合同总金额',
   `expected_date` DATE NOT NULL COMMENT '预期交期',
@@ -160,8 +183,12 @@ CREATE TABLE `order_master` (
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`order_id`),
+  KEY `idx_order_master_contract_id` (`contract_id`),
   KEY `idx_order_master_customer_id` (`customer_id`),
   KEY `idx_order_master_status_expected` (`order_status`, `expected_date`),
+  CONSTRAINT `fk_order_master_contract_id`
+    FOREIGN KEY (`contract_id`) REFERENCES `contract_master` (`contract_id`)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT `fk_order_master_customer_id`
     FOREIGN KEY (`customer_id`) REFERENCES `customer` (`customer_id`)
     ON UPDATE CASCADE ON DELETE RESTRICT,
@@ -175,6 +202,7 @@ CREATE TABLE `order_detail` (
   `detail_id` VARCHAR(30) NOT NULL COMMENT '订单明细ID（主键）',
   `order_id` VARCHAR(30) NOT NULL COMMENT '订单号（外键关联order_master.order_id）',
   `product_model` VARCHAR(30) NOT NULL COMMENT '产品型号',
+  `air_permeability` INT NOT NULL DEFAULT 0 COMMENT '透气量',
   `length_req` INT NOT NULL COMMENT '定制长度要求',
   `width_req` INT NOT NULL COMMENT '定制宽度要求',
   `craft_req` VARCHAR(200) DEFAULT NULL COMMENT '特殊工艺要求',
@@ -184,6 +212,7 @@ CREATE TABLE `order_detail` (
   PRIMARY KEY (`detail_id`),
   KEY `idx_order_detail_order_id` (`order_id`),
   KEY `idx_order_detail_model_status` (`product_model`, `detail_status`),
+  KEY `idx_order_detail_model_permeability_status` (`product_model`, `air_permeability`, `detail_status`),
   CONSTRAINT `fk_order_detail_order_id`
     FOREIGN KEY (`order_id`) REFERENCES `order_master` (`order_id`)
     ON UPDATE CASCADE ON DELETE RESTRICT
@@ -288,4 +317,3 @@ CREATE TABLE `material_inventory` (
   COMMENT='物料库存账本表（建议更新时使用 version_no 做乐观锁）';
 
 SET FOREIGN_KEY_CHECKS = 1;
-

@@ -18,6 +18,8 @@ public class OrderDetail {
 
     private String productModel;
 
+    private Integer airPermeability;
+
     private Integer lengthReq;
 
     private Integer widthReq;
@@ -30,4 +32,3 @@ public class OrderDetail {
 
     private LocalDateTime updatedAt;
 }
-

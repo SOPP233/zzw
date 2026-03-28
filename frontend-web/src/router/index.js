@@ -5,12 +5,18 @@ import { hasRouteAccess, useAuthStore } from "../stores/auth";
 const OrderList = () => import("../views/order/OrderList.vue");
 const OrderManage = () => import("../views/order/OrderManage.vue");
 const ProductionWorkbench = () => import("../views/production/ProductionWorkbench.vue");
-const TaskCenter = () => import("../views/production/TaskCenter.vue");
+const ProductionReview = () => import("../views/production/ProductionReview.vue");
+const WeavingTaskCenter = () => import("../views/production/task-center/WeavingTaskCenter.vue");
+const SettingTaskCenter = () => import("../views/production/task-center/SettingTaskCenter.vue");
+const CuttingTaskCenter = () => import("../views/production/task-center/CuttingTaskCenter.vue");
+const JointingTaskCenter = () => import("../views/production/task-center/JointingTaskCenter.vue");
+const ReshapingTaskCenter = () => import("../views/production/task-center/ReshapingTaskCenter.vue");
 const BasicProducts = () => import("../views/basic/BasicProducts.vue");
 const BasicEquipments = () => import("../views/basic/BasicEquipments.vue");
 const InventoryLedger = () => import("../views/inventory/InventoryLedger.vue");
 const StatsDashboard = () => import("../views/stats/StatsDashboard.vue");
 const Unauthorized = () => import("../views/system/Unauthorized.vue");
+const Login = () => import("../views/system/Login.vue");
 
 const routes = [
   {
@@ -21,12 +27,23 @@ const routes = [
       { path: "orders/tracking", name: "OrderTracking", component: OrderList },
       { path: "orders/manage", name: "OrderManage", component: OrderManage },
       { path: "production/workbench", name: "ProductionWorkbench", component: ProductionWorkbench },
-      { path: "production/tasks", name: "TaskCenter", component: TaskCenter },
+      { path: "production/review", name: "ProductionReview", component: ProductionReview },
+      { path: "production/tasks", name: "TaskCenter", redirect: "/production/tasks/weaving" },
+      { path: "production/tasks/weaving", name: "WeavingTaskCenter", component: WeavingTaskCenter },
+      { path: "production/tasks/setting", name: "SettingTaskCenter", component: SettingTaskCenter },
+      { path: "production/tasks/cutting", name: "CuttingTaskCenter", component: CuttingTaskCenter },
+      { path: "production/tasks/jointing", name: "JointingTaskCenter", component: JointingTaskCenter },
+      { path: "production/tasks/reshaping", name: "ReshapingTaskCenter", component: ReshapingTaskCenter },
       { path: "basic/products", name: "BasicProducts", component: BasicProducts },
       { path: "basic/equipments", name: "BasicEquipments", component: BasicEquipments },
       { path: "inventory/ledger", name: "InventoryLedger", component: InventoryLedger },
       { path: "stats/dashboard", name: "StatsDashboard", component: StatsDashboard }
     ]
+  },
+  {
+    path: "/login",
+    name: "Login",
+    component: Login
   },
   {
     path: "/unauthorized",
@@ -40,18 +57,27 @@ const router = createRouter({
   routes
 });
 
-router.beforeEach((to, from, next) => {
-  if (to.path === "/unauthorized") {
-    next();
-    return;
-  }
+router.beforeEach((to) => {
   const authStore = useAuthStore();
-  if (hasRouteAccess(to.path, authStore.roleCode.value)) {
-    next();
-    return;
+
+  if (to.path === "/login") {
+    if (authStore.isAuthenticated.value) {
+      return authStore.getDefaultRouteByRole(authStore.roleCode.value);
+    }
+    return true;
   }
-  next("/unauthorized");
+
+  if (to.path === "/unauthorized") {
+    return true;
+  }
+
+  if (!authStore.isAuthenticated.value) {
+    return { path: "/login", query: { redirect: to.fullPath } };
+  }
+  if (hasRouteAccess(to.path, authStore.roleCode.value)) {
+    return true;
+  }
+  return "/unauthorized";
 });
 
 export default router;
-

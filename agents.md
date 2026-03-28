@@ -86,14 +86,24 @@ npm run dev:mp-weixin
   - `/orders/tracking`
   - `/orders/manage`
   - `/production/workbench`
-  - `/production/tasks`
+  - `/production/tasks`（重定向至 `/production/tasks/weaving`）
+  - `/production/tasks/weaving`
+  - `/production/tasks/setting`
+  - `/production/tasks/cutting`
+  - `/production/tasks/jointing`
+  - `/production/tasks/reshaping`
   - `/basic/customers`
   - `/basic/materials`
   - `/inventory/ledger`
   - `/stats/dashboard`
 - 生产协同模块前端实现：
   - `src/views/production/ProductionWorkbench.vue`：待排产明细筛选、合并排产下发（`POST /api/schedule/merge`）。
-  - `src/views/production/TaskCenter.vue`：工序任务列表、按工序采集参数、报工完成（`POST /api/tasks/{taskId}/complete`）。
+  - `src/views/production/task-center/TaskCenterBase.vue`：工序任务通用页（任务查询、参数采集、报工完成）。
+  - `src/views/production/task-center/WeavingTaskCenter.vue`：织造任务页（`/production/tasks/weaving`）。
+  - `src/views/production/task-center/SettingTaskCenter.vue`：定型任务页（`/production/tasks/setting`）。
+  - `src/views/production/task-center/CuttingTaskCenter.vue`：裁网任务页（`/production/tasks/cutting`）。
+  - `src/views/production/task-center/JointingTaskCenter.vue`：插接任务页（`/production/tasks/jointing`）。
+  - `src/views/production/task-center/ReshapingTaskCenter.vue`：二次定型任务页（`/production/tasks/reshaping`）。
 - 工序状态约定：
   - `processType`: 1织造、2定型、3裁网、4插接、5二次定型
   - `status`: 0待接收、1执行中、2完工审批、3已完成
@@ -155,3 +165,26 @@ npm run dev:mp-weixin
 ## RBAC Update Note
 
 - Added `SYSTEM_ADMIN` role as super role in frontend RBAC config (`src/constants/rbac.js`), with full route access.
+
+## Change Log
+
+- 2026-03-28: 修正前端订单状态字典与当前数据库基线一致（`LW.sql`）：`1业务审核中、2待排产、3生产中、4部分入库、5已完结`；保留 `0新建草稿、6已发货` 仅作历史兼容显示。更新文件：`frontend-web/src/constants/order.js`。
+- 2026-03-28: 将“工序任务中心”拆分为 5 个独立页面（织造/定型/裁网/插接/二次定型），新增通用组件 `src/views/production/task-center/TaskCenterBase.vue` 复用报工逻辑；同步更新路由、左侧菜单与 RBAC 权限映射，并将 `/production/tasks` 重定向到 `/production/tasks/weaving`。
+- 2026-03-28: 新增后端基础数据接口 `GET /api/basic/products` 与 `GET /api/basic/equipments`（文件：`backend-springboot/src/main/java/com/lw/backend/controller/BasicDataController.java`），用于对接 `frontend-web` 基础数据模块页面。
+- 2026-03-28: 更新 `backend-springboot/TEST_CASES.md`，补充上述两个接口的联调样例与返回说明。
+- 2026-03-28: 前端新增登录页与登录态拦截（`frontend-web/src/views/system/Login.vue`、`frontend-web/src/router/index.js`、`frontend-web/src/stores/auth.js`），并移除 Web 右上角角色切换显示（`frontend-web/src/layout/index.vue`）。
+- 2026-03-28: 订单维护页新增“订单录入与分页”“客户录入与分页”双页签（`frontend-web/src/views/order/OrderManage.vue`），并补齐后端 `GET/POST /api/orders/full` 聚合分页与主从一体录入接口（`backend-springboot/src/main/java/com/lw/backend/controller/OrderQueryController.java`）。
+- 2026-03-28: 修复 `backend-springboot` Maven Wrapper，替换占位 `mvnw/mvnw.cmd` 为可自举下载 Maven 的脚本，并新增 `.mvn/wrapper/maven-wrapper.properties`，使项目不依赖系统全局 `mvn`。
+- 2026-03-28: 新增 `backend-springboot/.mvn/wrapper/.gitignore`，忽略 Wrapper 下载的 Maven 二进制产物（`apache-maven-*-bin.zip`、`apache-maven-*` 目录），避免误提交大文件。
+- 2026-03-28: 增强 `mvnw/mvnw.cmd`：当检测到 Java 版本低于 17 时自动下载并使用项目内 Temurin JDK 17；同时扩展 `.mvn/wrapper/.gitignore` 忽略 JDK 下载产物。
+- 2026-03-28: 将 `OrderManage.vue` 中订单录入与客户录入由弹窗改为页面内可见表单区（同屏“录入表单 + 分页列表”），确保进入页面即可直接录入。
+- 2026-03-28: 修复前端路由守卫 `next()` 弃用告警（改为 `beforeEach` return 风格）；并为 `OrderManage.vue` 增加 `/api/orders/full` 的 404 降级查询与降级录入逻辑（回退到 `/api/order-masters` + `/api/order-details`）。
+- 2026-03-28: 新增合同主表设计（`LW.sql`：`contract_master`）与后端接口 `GET/POST/PUT/DELETE /api/contracts`；订单录入改为基于合同号下单（`/api/orders/full` 强校验合同存在与合同-客户一致性），前端 `OrderManage.vue` 新增“合同录入与分页”页签并支持合同选择自动回填客户。
+- 2026-03-28: 调整策略为“严格后端 API 优先”：移除 `OrderManage.vue` 对 `/api/contracts` 的本地存储降级逻辑，仅保留 `/api/orders/full` 到基础订单接口的兼容查询/录入降级，避免以本地数据替代后端主数据。
+- 2026-03-28: 新增生产协同“生产审核”页面（`/production/review`），支持将订单状态从业务审核中(1)提交为待排产(2)；后端新增接口 `POST /api/order-masters/{id}/production-review` 并增强 `GET /api/order-masters` 筛选参数（orderId/orderStatus/customerId）。
+- 2026-03-28: 修复生产审核后排产工作台不可见问题：`POST /api/order-masters/{id}/production-review` 改为事务化同步更新订单主表与订单明细状态（`order_master.order_status=2` 同时 `order_detail.detail_status=2`）。
+- 2026-03-28: 新增订单明细“透气量”属性（`order_detail.air_permeability`），并将合并排产规则升级为“型号 + 透气量”双一致校验；同步更新订单录入、订单展示、排产工作台页面字段与筛选。
+- 2026-03-28: 按业务要求移除 `order_detail.craft_req` 字段链路：后端实体/Mapper/XML/接口响应与前端录单展示均不再读写该字段；`LW.sql` 与现库结构已同步去除该列，保留 `air_permeability` 作为非空关键属性。
+- 2026-03-28: 根据业务回调恢复 `order_detail.craft_req`（记录其他工艺参数）：后端实体/Mapper/XML/接口与前端订单录入/展示已恢复该字段；数据库现库已回补 `craft_req` 列，同时保留 `air_permeability` 非空约束与合批校验规则。
+- 2026-03-28: 排产工作台机台号改为下拉选择（1-8号机台，对应 `MC-01`~`MC-08`），不再手动输入机台号。
+- 2026-03-28: 优化排产工作台单条下发体验：明确提示“支持单条下发”；修复透气量筛选在 `null` 场景误过滤数据的问题，并增加勾选数据一致性校验提示。

@@ -35,8 +35,10 @@
               <el-table :data="row.details || []" size="small" border>
                 <el-table-column prop="detailId" label="明细编号" min-width="160" />
                 <el-table-column prop="productModel" label="产品型号" min-width="140" />
+                <el-table-column prop="airPermeability" label="透气量" width="100" />
                 <el-table-column prop="lengthReq" label="长度" width="100" />
                 <el-table-column prop="widthReq" label="宽度" width="100" />
+                <el-table-column prop="craftReq" label="工艺要求" min-width="150" />
                 <el-table-column label="明细状态" min-width="120">
                   <template #default="{ row: detail }">
                     <el-tag size="small">{{ detailStatusText(detail.detailStatus) }}</el-tag>

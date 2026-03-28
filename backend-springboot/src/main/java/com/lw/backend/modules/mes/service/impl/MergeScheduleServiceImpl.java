@@ -65,7 +65,7 @@ public class MergeScheduleServiceImpl implements MergeScheduleService {
         validateRequest(request);
 
         List<OrderDetail> details = fetchAndValidateDetails(request.getDetailIds());
-        validateSameProductModel(details);
+        validateMergeEligibility(details);
 
         String batchId = createProductionPlan(request.getMachineId());
         bindDetailsToBatchAndUpdateStatus(batchId, details);
@@ -78,6 +78,7 @@ public class MergeScheduleServiceImpl implements MergeScheduleService {
         result.put("machineId", request.getMachineId());
         result.put("detailIds", details.stream().map(OrderDetail::getDetailId).toList());
         result.put("productModel", details.get(0).getProductModel());
+        result.put("airPermeability", details.get(0).getAirPermeability());
         return result;
     }
 
@@ -102,10 +103,14 @@ public class MergeScheduleServiceImpl implements MergeScheduleService {
         return details;
     }
 
-    private void validateSameProductModel(List<OrderDetail> details) {
+    private void validateMergeEligibility(List<OrderDetail> details) {
         Set<String> models = details.stream().map(OrderDetail::getProductModel).collect(Collectors.toSet());
         if (models.size() != 1) {
             throw new BizException("所选明细型号不一致，无法合批");
+        }
+        Set<Integer> permeabilities = details.stream().map(OrderDetail::getAirPermeability).collect(Collectors.toSet());
+        if (permeabilities.size() != 1) {
+            throw new BizException("所选明细透气量不一致，无法合批");
         }
     }
 
@@ -174,4 +179,3 @@ public class MergeScheduleServiceImpl implements MergeScheduleService {
         return "TASK" + timePart + random;
     }
 }
-

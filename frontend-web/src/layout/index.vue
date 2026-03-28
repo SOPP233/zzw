@@ -9,10 +9,26 @@
           <el-menu-item v-if="visible('/orders/manage')" index="/orders/manage">订单维护</el-menu-item>
         </el-sub-menu>
 
-        <el-sub-menu v-if="visible('/production/workbench') || visible('/production/tasks')" index="/production">
+        <el-sub-menu
+          v-if="
+            visible('/production/workbench') ||
+            visible('/production/review') ||
+            visible('/production/tasks/weaving') ||
+            visible('/production/tasks/setting') ||
+            visible('/production/tasks/cutting') ||
+            visible('/production/tasks/jointing') ||
+            visible('/production/tasks/reshaping')
+          "
+          index="/production"
+        >
           <template #title>生产协同</template>
           <el-menu-item v-if="visible('/production/workbench')" index="/production/workbench">排产工作台</el-menu-item>
-          <el-menu-item v-if="visible('/production/tasks')" index="/production/tasks">工序任务中心</el-menu-item>
+          <el-menu-item v-if="visible('/production/review')" index="/production/review">生产审核</el-menu-item>
+          <el-menu-item v-if="visible('/production/tasks/weaving')" index="/production/tasks/weaving">织造任务</el-menu-item>
+          <el-menu-item v-if="visible('/production/tasks/setting')" index="/production/tasks/setting">定型任务</el-menu-item>
+          <el-menu-item v-if="visible('/production/tasks/cutting')" index="/production/tasks/cutting">裁网任务</el-menu-item>
+          <el-menu-item v-if="visible('/production/tasks/jointing')" index="/production/tasks/jointing">插接任务</el-menu-item>
+          <el-menu-item v-if="visible('/production/tasks/reshaping')" index="/production/tasks/reshaping">二次定型任务</el-menu-item>
         </el-sub-menu>
 
         <el-sub-menu v-if="visible('/basic/products') || visible('/basic/equipments')" index="/basic">
@@ -29,11 +45,9 @@
     <section class="main">
       <header class="header">
         <div class="title">离散制造 MES 管理端</div>
-        <div class="role-switch">
-          <span class="role-label">当前角色</span>
-          <el-select v-model="roleCodeProxy" size="small" style="width: 150px">
-            <el-option v-for="role in ROLE_OPTIONS" :key="role.value" :label="role.label" :value="role.value" />
-          </el-select>
+        <div class="user-panel">
+          <span class="user-name">{{ authStore.username.value || "未命名用户" }}</span>
+          <el-button size="small" text @click="handleLogout">退出登录</el-button>
         </div>
       </header>
       <main class="content">
@@ -44,27 +58,18 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { ROLE_OPTIONS } from "../constants/rbac";
+import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 
-const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 
 const visible = (path) => authStore.hasRouteAccess(path, authStore.roleCode.value);
 
-const roleCodeProxy = computed({
-  get: () => authStore.roleCode.value,
-  set: (value) => {
-    authStore.setRoleCode(value);
-    const target = authStore.getDefaultRouteByRole(value);
-    if (route.path !== target) {
-      router.push(target);
-    }
-  }
-});
+const handleLogout = () => {
+  authStore.logout();
+  router.replace("/login");
+};
 </script>
 
 <style scoped>
@@ -109,13 +114,13 @@ const roleCodeProxy = computed({
   color: #111827;
 }
 
-.role-switch {
+.user-panel {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.role-label {
+.user-name {
   color: #4b5563;
   font-size: 13px;
 }
@@ -139,4 +144,3 @@ const roleCodeProxy = computed({
   background-color: #1f2937;
 }
 </style>
-

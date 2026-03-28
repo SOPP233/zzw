@@ -1,0 +1,6 @@
+apache-maven-*-bin.zip
+apache-maven-*/
+temurin-17-jdk.zip
+temurin-17-jdk.tar.gz
+jdk-17/
+jdk-tmp/

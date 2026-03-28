@@ -8,7 +8,7 @@
       </template>
 
       <el-alert
-        title="合批规则：仅允许待排产且产品型号一致的订单明细合并到同一批次"
+        title="排产规则：支持单条或多条下发；多条时必须产品型号与透气量一致"
         type="info"
         :closable="false"
         show-icon
@@ -19,8 +19,18 @@
         <el-form-item label="产品型号">
           <el-input v-model="query.productModel" placeholder="输入型号筛选" clearable @keyup.enter="fetchDetails" />
         </el-form-item>
+        <el-form-item label="透气量">
+          <el-input-number v-model="query.airPermeability" :min="0" :controls="false" placeholder="输入透气量筛选" />
+        </el-form-item>
         <el-form-item label="机台号">
-          <el-input v-model="machineId" placeholder="例如 MC-01" clearable />
+          <el-select v-model="machineId" placeholder="请选择机台号" style="width: 180px" clearable>
+            <el-option
+              v-for="opt in MACHINE_OPTIONS"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" :loading="loading" @click="fetchDetails">刷新待排产明细</el-button>
@@ -41,6 +51,7 @@
         <el-table-column prop="detailId" label="明细编号" min-width="150" />
         <el-table-column prop="orderId" label="订单号" min-width="150" />
         <el-table-column prop="productModel" label="产品型号" min-width="140" />
+        <el-table-column prop="airPermeability" label="透气量" min-width="100" />
         <el-table-column prop="lengthReq" label="长度" width="90" />
         <el-table-column prop="widthReq" label="宽度" width="90" />
         <el-table-column label="明细状态" min-width="120">
@@ -68,9 +79,15 @@ const loading = ref(false);
 const details = ref([]);
 const selectedIds = ref([]);
 const machineId = ref("");
+const MACHINE_OPTIONS = Array.from({ length: 8 }, (_, idx) => {
+  const no = idx + 1;
+  const value = `MC-${String(no).padStart(2, "0")}`;
+  return { label: `${no}号机台`, value };
+});
 
 const query = reactive({
-  productModel: ""
+  productModel: "",
+  airPermeability: undefined
 });
 
 const detailStatusText = (status) => DETAIL_STATUS_MAP[status] || "未知";
@@ -88,7 +105,8 @@ const fetchDetails = async () => {
     const res = await request.get("/api/order-details", { params: { pageNo: 1, pageSize: 500 } });
     const rows = normalizeRows(res?.data ?? res)
       .filter((item) => item.detailStatus === 2)
-      .filter((item) => (query.productModel ? item.productModel?.includes(query.productModel) : true));
+      .filter((item) => (query.productModel ? item.productModel?.includes(query.productModel) : true))
+      .filter((item) => (query.airPermeability == null ? true : item.airPermeability === query.airPermeability));
     details.value = rows;
     selectedIds.value = [];
   } catch (error) {
@@ -110,6 +128,17 @@ const handleMerge = async () => {
   }
   if (selectedIds.value.length < 1) {
     ElMessage.warning("请至少选择一条明细");
+    return;
+  }
+  const selectedRows = details.value.filter((item) => selectedIds.value.includes(item.detailId));
+  if (selectedRows.length !== selectedIds.value.length) {
+    ElMessage.warning("勾选明细与当前列表不一致，请刷新后重新勾选");
+    return;
+  }
+  const modelSet = new Set(selectedRows.map((item) => item.productModel));
+  const permeabilitySet = new Set(selectedRows.map((item) => item.airPermeability));
+  if (modelSet.size > 1 || permeabilitySet.size > 1) {
+    ElMessage.warning("仅允许型号与透气量均一致的明细合并排产");
     return;
   }
   try {
@@ -155,4 +184,3 @@ fetchDetails();
   margin-left: 12px;
 }
 </style>
-

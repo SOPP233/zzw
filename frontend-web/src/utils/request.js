@@ -1,5 +1,6 @@
 import axios from "axios";
 import { ElMessage } from "element-plus";
+import { getAuthToken } from "../stores/auth";
 
 const request = axios.create({
   baseURL: "http://localhost:8080",
@@ -23,5 +24,13 @@ request.interceptors.response.use(
   }
 );
 
-export default request;
+request.interceptors.request.use((config) => {
+  const token = getAuthToken();
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
+export default request;
