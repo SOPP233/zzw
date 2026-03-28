@@ -56,6 +56,10 @@ npm run dev:mp-weixin
 - 新增 Mapper XML 后，确认 `mybatis-plus.mapper-locations` 覆盖到对应路径。
 - 分页查询统一走 MyBatis-Plus 分页拦截器（`MybatisPlusInterceptor + PaginationInnerInterceptor`）。
 - 客户管理接口基线路径：`/api/customers`（包含增删改查与分页查询）。
+- 所有业务表接口统一采用 REST 风格：`POST/GET(id)/GET(page)/PUT/DELETE`。
+- 全量接口测试样例统一维护在 `backend-springboot/TEST_CASES.md`。
+- 合并排产核心链路统一走 `MergeScheduleService`，必须使用 `@Transactional(rollbackFor = Exception.class)` 保证原子性。
+- 合并排产接口路径：`POST /api/schedule/merge`，业务校验失败统一抛 `BizException`。
 
 ## Collaboration Rules
 
