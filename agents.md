@@ -60,6 +60,9 @@ npm run dev:mp-weixin
 - 全量接口测试样例统一维护在 `backend-springboot/TEST_CASES.md`。
 - 合并排产核心链路统一走 `MergeScheduleService`，必须使用 `@Transactional(rollbackFor = Exception.class)` 保证原子性。
 - 合并排产接口路径：`POST /api/schedule/merge`，业务校验失败统一抛 `BizException`。
+- 合并排产在更新 `order_detail` 状态前后必须打印日志：
+  - `log.info("准备更新明细状态")`
+  - `log.info("明细状态更新完成，影响行数: {}", rows)`
 
 ## Collaboration Rules
 

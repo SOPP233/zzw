@@ -1,6 +1,7 @@
 package com.lw.backend.modules.mes.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.lw.backend.modules.mes.dto.MergeScheduleRequest;
 import com.lw.backend.modules.mes.entity.OrderDetail;
 import com.lw.backend.modules.mes.entity.PlanDetailRelation;
@@ -13,6 +14,7 @@ import com.lw.backend.modules.mes.mapper.ProcessTaskMapper;
 import com.lw.backend.modules.mes.mapper.ProductionPlanMapper;
 import com.lw.backend.modules.mes.service.MergeScheduleService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -28,11 +30,12 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class MergeScheduleServiceImpl implements MergeScheduleService {
 
     /**
-     * 约定状态：3=生产中（与 order_master 中“生产中”状态保持一致）
+     * 订单明细状态：3=生产中
      */
     private static final int DETAIL_STATUS_IN_PRODUCTION = 3;
 
@@ -47,7 +50,7 @@ public class MergeScheduleServiceImpl implements MergeScheduleService {
     private static final int PROCESS_TYPE_WEAVING = 1;
 
     /**
-     * production_plan 状态：1=加工中（排产成功即投入生产）
+     * production_plan 状态：1=加工中
      */
     private static final int PLAN_STATUS_PROCESSING = 1;
 
@@ -122,7 +125,6 @@ public class MergeScheduleServiceImpl implements MergeScheduleService {
 
     private void bindDetailsToBatchAndUpdateStatus(String batchId, List<OrderDetail> details) {
         for (OrderDetail detail : details) {
-            // 建立批次与明细的映射关系，支持后续追溯与拆批分析
             PlanDetailRelation relation = new PlanDetailRelation();
             relation.setBatchId(batchId);
             relation.setDetailId(detail.getDetailId());
@@ -131,12 +133,16 @@ public class MergeScheduleServiceImpl implements MergeScheduleService {
                 throw new BizException("写入批次明细关联失败，detailId=" + detail.getDetailId());
             }
 
-            // 明细状态置为“生产中”
-            OrderDetail update = new OrderDetail();
-            update.setDetailId(detail.getDetailId());
-            update.setDetailStatus(DETAIL_STATUS_IN_PRODUCTION);
-            int updated = orderDetailMapper.updateById(update);
-            if (updated != 1) {
+            log.info("准备更新明细状态");
+            int rows = orderDetailMapper.update(
+                    null,
+                    new LambdaUpdateWrapper<OrderDetail>()
+                            .eq(OrderDetail::getDetailId, detail.getDetailId())
+                            .set(OrderDetail::getDetailStatus, DETAIL_STATUS_IN_PRODUCTION)
+            );
+            log.info("明细状态更新完成，影响行数: {}", rows);
+
+            if (rows != 1) {
                 throw new BizException("更新明细状态失败，detailId=" + detail.getDetailId());
             }
         }
