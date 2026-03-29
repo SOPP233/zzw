@@ -198,6 +198,7 @@ CREATE TABLE `order_detail` (
   `detail_id` VARCHAR(32) NOT NULL COMMENT '订单明细唯一编码（主键）',
   `order_no` VARCHAR(32) NOT NULL COMMENT '所属订单编号（外键）',
   `product_model` VARCHAR(50) NOT NULL COMMENT '客户定制造纸网型号',
+  `air_permeability` INT(11) NOT NULL DEFAULT 0 COMMENT '透气量',
   `req_length` DECIMAL(10,2) NOT NULL COMMENT '要求长度（米）',
   `req_width` DECIMAL(10,2) NOT NULL COMMENT '要求宽度（米）',
   `detail_status` TINYINT(3) NOT NULL DEFAULT 1 COMMENT '微观状态：1待合批，2已汇入大网，3已裁切分离，4插接中，5已入库',
@@ -207,6 +208,7 @@ CREATE TABLE `order_detail` (
   PRIMARY KEY (`detail_id`),
   KEY `idx_order_detail_order_no` (`order_no`),
   KEY `idx_order_detail_model_status` (`product_model`, `detail_status`),
+  KEY `idx_order_detail_model_air_status` (`product_model`, `air_permeability`, `detail_status`),
   CONSTRAINT `fk_order_detail_order_no`
     FOREIGN KEY (`order_no`) REFERENCES `order_master` (`order_no`)
     ON UPDATE CASCADE ON DELETE RESTRICT,
@@ -225,6 +227,7 @@ CREATE TABLE `prd_weaving_process` (
   `machine_id` VARCHAR(32) NOT NULL COMMENT '执行织造任务的设备编号',
   `operator_id` VARCHAR(32) DEFAULT NULL COMMENT '操作员工号',
   `actual_length` DECIMAL(10,2) DEFAULT NULL COMMENT '实际总下机长度（米）',
+  `actual_width` DECIMAL(10,2) DEFAULT NULL COMMENT '实际总下机宽度（米）',
   `process_status` TINYINT(3) NOT NULL COMMENT '工序状态：1待开机，2织造中，3已完工',
   `completed_at` DATETIME DEFAULT NULL COMMENT '实际织造完工时间',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

@@ -175,6 +175,7 @@ npm run dev:mp-weixin
 
 ## Change Log
 
+- 2026-03-29: 订单管理链路按“客户→合同→明细订单”完善：前端 `OrderManage.vue` 页签顺序调整为客户录入、合同录入、明细订单录入，订单明细字段改为 `reqLength/reqWidth`；后端订单模型切换到新字段映射（`order_no/contract_no/req_length/req_width/delivered_qty`），重写 `OrderQueryController` 以通过订单主表返回全部明细，并保留 `orderId/contractId` 兼容字段；同步修正 `OrderMasterController` 与 `MergeScheduleServiceImpl` 的新字段引用。
 - 2026-03-29: 在 `LW.sql` 完整补齐 MES 工序模型 2.4/2.5/2.6：新增 `prd_cutting_process`（裁网拆批 1:N）、`prd_splicing_process`（插接 1:1，`cut_batch_no` 唯一）、`prd_sec_setting_process`（二次定型 1:1，`splice_batch_no` 唯一），并同步更新顶部清表顺序与状态约束。
 - 2026-03-29: 按“工序流转与合批拆批执行模型”新增 `map_order_weaving`、`prd_weaving_process`、`prd_setting_process` 三张表到 `LW.sql`，并补充状态/数量检查约束、主外键关系及清表顺序（支持可重复执行）。
 - 2026-03-29: 按新订单模型规范调整 `LW.sql` 的订单主表/明细表：`order_master` 改为 `order_no` 主键与 `contract_no` 外键，`expected_date` 改为可空，`order_status` 扩展为 `0~6`；`order_detail` 改为 `detail_id/order_no/product_model/req_length/req_width/detail_status/delivered_qty` 字段模型，并补充状态与数量检查约束。
@@ -210,3 +211,4 @@ npm run dev:mp-weixin
 - 2026-03-28: 根据业务回调恢复 `order_detail.craft_req`（记录其他工艺参数）：后端实体/Mapper/XML/接口与前端订单录入/展示已恢复该字段；数据库现库已回补 `craft_req` 列，同时保留 `air_permeability` 非空约束与合批校验规则。
 - 2026-03-28: 排产工作台机台号改为下拉选择（1-8号机台，对应 `MC-01`~`MC-08`），不再手动输入机台号。
 - 2026-03-28: 优化排产工作台单条下发体验：明确提示“支持单条下发”；修复透气量筛选在 `null` 场景误过滤数据的问题，并增加勾选数据一致性校验提示。
+- 2026-03-29: 生产协同模块新增并打通 6 个页面（排产工作区/织造订单/定型订单/裁网订单/插接订单/二次定型订单）；后端新增 `GET /api/schedule/workbench`、重构 `POST /api/schedule/merge` 到 `prd_weaving_process + map_order_weaving`，并新增 5 个工序订单分页接口（`/api/production/*-orders`）；订单明细补齐 `air_permeability` 链路并支持“同合同主单追加明细”录入；`LW.sql` 同步新增 `order_detail.air_permeability` 与 `prd_weaving_process.actual_width`。

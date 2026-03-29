@@ -25,7 +25,13 @@ export const ROUTE_ROLE_MAP = {
     ROLE_CODE.INVENTORY_ADMIN
   ],
   "/orders/manage": [ROLE_CODE.SYSTEM_ADMIN, ROLE_CODE.SALES],
+  "/production/workbench": [ROLE_CODE.SYSTEM_ADMIN, ROLE_CODE.LEADER, ROLE_CODE.DIRECTOR],
   "/production/review": [ROLE_CODE.SYSTEM_ADMIN, ROLE_CODE.LEADER, ROLE_CODE.DIRECTOR],
+  "/production/weaving-orders": [ROLE_CODE.SYSTEM_ADMIN, ROLE_CODE.LEADER, ROLE_CODE.DIRECTOR, ROLE_CODE.WORKER],
+  "/production/setting-orders": [ROLE_CODE.SYSTEM_ADMIN, ROLE_CODE.LEADER, ROLE_CODE.DIRECTOR, ROLE_CODE.WORKER],
+  "/production/cutting-orders": [ROLE_CODE.SYSTEM_ADMIN, ROLE_CODE.LEADER, ROLE_CODE.DIRECTOR, ROLE_CODE.WORKER],
+  "/production/splicing-orders": [ROLE_CODE.SYSTEM_ADMIN, ROLE_CODE.LEADER, ROLE_CODE.DIRECTOR, ROLE_CODE.WORKER],
+  "/production/sec-setting-orders": [ROLE_CODE.SYSTEM_ADMIN, ROLE_CODE.LEADER, ROLE_CODE.DIRECTOR, ROLE_CODE.WORKER],
   "/basic/products": [ROLE_CODE.SYSTEM_ADMIN, ROLE_CODE.LEADER, ROLE_CODE.DIRECTOR],
   "/basic/equipments": [ROLE_CODE.SYSTEM_ADMIN, ROLE_CODE.LEADER, ROLE_CODE.DIRECTOR],
   "/inventory/ledger": [ROLE_CODE.SYSTEM_ADMIN, ROLE_CODE.LEADER, ROLE_CODE.SALES, ROLE_CODE.INVENTORY_ADMIN],
@@ -39,7 +45,7 @@ export const DEFAULT_ROUTE_BY_ROLE = {
   [ROLE_CODE.SYSTEM_ADMIN]: "/orders/manage",
   [ROLE_CODE.LEADER]: "/stats/dashboard",
   [ROLE_CODE.SALES]: "/orders/manage",
-  [ROLE_CODE.DIRECTOR]: "/production/review",
-  [ROLE_CODE.WORKER]: "/orders/tracking",
+  [ROLE_CODE.DIRECTOR]: "/production/workbench",
+  [ROLE_CODE.WORKER]: "/production/weaving-orders",
   [ROLE_CODE.INVENTORY_ADMIN]: "/inventory/raw-materials"
 };

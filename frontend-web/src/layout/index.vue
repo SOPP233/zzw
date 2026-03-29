@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="layout">
     <aside class="sider">
       <div class="brand">MES Web</div>
@@ -11,12 +11,24 @@
 
         <el-sub-menu
           v-if="
-            visible('/production/review')
+            visible('/production/workbench') ||
+            visible('/production/review') ||
+            visible('/production/weaving-orders') ||
+            visible('/production/setting-orders') ||
+            visible('/production/cutting-orders') ||
+            visible('/production/splicing-orders') ||
+            visible('/production/sec-setting-orders')
           "
           index="/production"
         >
           <template #title>生产协同</template>
+          <el-menu-item v-if="visible('/production/workbench')" index="/production/workbench">排产工作区</el-menu-item>
           <el-menu-item v-if="visible('/production/review')" index="/production/review">生产审核</el-menu-item>
+          <el-menu-item v-if="visible('/production/weaving-orders')" index="/production/weaving-orders">织造订单</el-menu-item>
+          <el-menu-item v-if="visible('/production/setting-orders')" index="/production/setting-orders">定型订单</el-menu-item>
+          <el-menu-item v-if="visible('/production/cutting-orders')" index="/production/cutting-orders">裁网订单</el-menu-item>
+          <el-menu-item v-if="visible('/production/splicing-orders')" index="/production/splicing-orders">插接订单</el-menu-item>
+          <el-menu-item v-if="visible('/production/sec-setting-orders')" index="/production/sec-setting-orders">二次定型订单</el-menu-item>
         </el-sub-menu>
 
         <el-sub-menu v-if="visible('/basic/products') || visible('/basic/equipments')" index="/basic">

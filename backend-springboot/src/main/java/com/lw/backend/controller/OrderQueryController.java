@@ -3,19 +3,15 @@ package com.lw.backend.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.lw.backend.modules.mes.exception.BizException;
 import com.lw.backend.modules.mes.entity.ContractMaster;
 import com.lw.backend.modules.mes.entity.Customer;
 import com.lw.backend.modules.mes.entity.OrderDetail;
 import com.lw.backend.modules.mes.entity.OrderMaster;
-import com.lw.backend.modules.mes.entity.PlanDetailRelation;
-import com.lw.backend.modules.mes.entity.ProcessTask;
+import com.lw.backend.modules.mes.exception.BizException;
 import com.lw.backend.modules.mes.mapper.ContractMasterMapper;
 import com.lw.backend.modules.mes.mapper.CustomerMapper;
 import com.lw.backend.modules.mes.mapper.OrderDetailMapper;
 import com.lw.backend.modules.mes.mapper.OrderMasterMapper;
-import com.lw.backend.modules.mes.mapper.PlanDetailRelationMapper;
-import com.lw.backend.modules.mes.mapper.ProcessTaskMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -47,52 +43,25 @@ public class OrderQueryController {
     private final OrderDetailMapper orderDetailMapper;
     private final CustomerMapper customerMapper;
     private final ContractMasterMapper contractMasterMapper;
-    private final PlanDetailRelationMapper planDetailRelationMapper;
-    private final ProcessTaskMapper processTaskMapper;
 
     @GetMapping
     public Map<String, Object> list(@RequestParam(required = false) String customerName) {
-        List<Customer> customers = customerMapper.selectList(new LambdaQueryWrapper<Customer>()
-                .like(StringUtils.hasText(customerName), Customer::getCustomerName, customerName));
-
-        if (customers.isEmpty()) {
+        CustomerContractContext context = buildCustomerContractContext(customerName);
+        if (context.contractIds().isEmpty()) {
             return success(Collections.emptyList());
         }
 
-        Set<String> customerIds = customers.stream().map(Customer::getCustomerId).collect(Collectors.toSet());
-        Map<String, String> customerNameMap = customers.stream()
-                .collect(Collectors.toMap(Customer::getCustomerId, Customer::getCustomerName, (a, b) -> a));
-
         List<OrderMaster> masters = orderMasterMapper.selectList(new LambdaQueryWrapper<OrderMaster>()
-                .in(OrderMaster::getCustomerId, customerIds)
+                .in(OrderMaster::getContractNo, context.contractIds())
                 .orderByDesc(OrderMaster::getCreatedAt));
-
         if (masters.isEmpty()) {
             return success(Collections.emptyList());
         }
 
-        Set<String> orderIds = masters.stream().map(OrderMaster::getOrderId).collect(Collectors.toSet());
-        List<OrderDetail> details = orderDetailMapper.selectList(new LambdaQueryWrapper<OrderDetail>()
-                .in(OrderDetail::getOrderId, orderIds)
-                .orderByAsc(OrderDetail::getCreatedAt));
-        Map<String, DetailProcessProgress> progressMap = buildDetailProgressMap(details);
-
-        Map<String, List<OrderDetail>> detailGroup = details.stream()
-                .collect(Collectors.groupingBy(OrderDetail::getOrderId));
-
-        List<Map<String, Object>> rows = masters.stream().map(master -> {
-            List<OrderDetail> orderDetails = detailGroup.getOrDefault(master.getOrderId(), Collections.emptyList());
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("orderId", master.getOrderId());
-            row.put("customerId", master.getCustomerId());
-            row.put("customerName", customerNameMap.get(master.getCustomerId()));
-            row.put("expectedDate", master.getExpectedDate());
-            row.put("orderStatus", resolveOrderStatus(master.getOrderStatus(), orderDetails));
-            row.put("totalAmount", master.getTotalAmount());
-            row.put("details", orderDetails.stream().map(detail -> toDetailRow(detail, progressMap.get(detail.getDetailId()))).toList());
-            return row;
-        }).toList();
-
+        Map<String, List<OrderDetail>> detailGroup = buildDetailGroup(masters);
+        List<Map<String, Object>> rows = masters.stream()
+                .map(master -> toOrderRow(master, detailGroup.getOrDefault(master.getOrderNo(), Collections.emptyList()), context))
+                .toList();
         return success(rows);
     }
 
@@ -102,52 +71,25 @@ public class OrderQueryController {
                                         @RequestParam(required = false) String orderId,
                                         @RequestParam(required = false) String customerName,
                                         @RequestParam(required = false) Integer orderStatus) {
-        List<Customer> customers = customerMapper.selectList(new LambdaQueryWrapper<Customer>()
-                .like(StringUtils.hasText(customerName), Customer::getCustomerName, customerName));
-        if (customers.isEmpty()) {
+        CustomerContractContext context = buildCustomerContractContext(customerName);
+        if (context.contractIds().isEmpty()) {
             return success(emptyPage(pageNo, pageSize));
         }
 
-        Set<String> customerIds = customers.stream().map(Customer::getCustomerId).collect(Collectors.toSet());
-        Map<String, String> customerNameMap = customers.stream()
-                .collect(Collectors.toMap(Customer::getCustomerId, Customer::getCustomerName, (a, b) -> a));
-
         LambdaQueryWrapper<OrderMaster> wrapper = new LambdaQueryWrapper<OrderMaster>()
-                .in(OrderMaster::getCustomerId, customerIds)
-                .like(StringUtils.hasText(orderId), OrderMaster::getOrderId, orderId)
+                .in(OrderMaster::getContractNo, context.contractIds())
+                .like(StringUtils.hasText(orderId), OrderMaster::getOrderNo, orderId)
                 .eq(orderStatus != null, OrderMaster::getOrderStatus, orderStatus)
                 .orderByDesc(OrderMaster::getCreatedAt);
         IPage<OrderMaster> pageResult = orderMasterMapper.selectPage(new Page<>(pageNo, pageSize), wrapper);
-        List<OrderMaster> masters = pageResult.getRecords();
-        if (masters.isEmpty()) {
+        if (pageResult.getRecords().isEmpty()) {
             return success(emptyPage(pageNo, pageSize, pageResult.getTotal()));
         }
 
-        Set<String> orderIds = masters.stream().map(OrderMaster::getOrderId).collect(Collectors.toSet());
-        List<OrderDetail> details = orderDetailMapper.selectList(new LambdaQueryWrapper<OrderDetail>()
-                .in(OrderDetail::getOrderId, orderIds)
-                .orderByAsc(OrderDetail::getCreatedAt));
-        Map<String, DetailProcessProgress> progressMap = buildDetailProgressMap(details);
-        Map<String, List<OrderDetail>> detailGroup = details.stream()
-                .collect(Collectors.groupingBy(OrderDetail::getOrderId));
-
-        List<Map<String, Object>> records = masters.stream().map(master -> {
-            List<OrderDetail> orderDetails = detailGroup.getOrDefault(master.getOrderId(), Collections.emptyList());
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("orderId", master.getOrderId());
-            row.put("contractId", master.getContractId());
-            row.put("customerId", master.getCustomerId());
-            row.put("customerName", customerNameMap.get(master.getCustomerId()));
-            row.put("signDate", master.getCreatedAt() == null ? null : master.getCreatedAt().toLocalDate());
-            row.put("totalAmount", master.getTotalAmount());
-            row.put("deliveryAddress", master.getRemark());
-            row.put("expectedDate", master.getExpectedDate());
-            row.put("orderStatus", resolveOrderStatus(master.getOrderStatus(), orderDetails));
-            row.put("details", orderDetails.stream()
-                    .map(detail -> toDetailRow(detail, progressMap.get(detail.getDetailId())))
-                    .toList());
-            return row;
-        }).toList();
+        Map<String, List<OrderDetail>> detailGroup = buildDetailGroup(pageResult.getRecords());
+        List<Map<String, Object>> records = pageResult.getRecords().stream()
+                .map(master -> toOrderRow(master, detailGroup.getOrDefault(master.getOrderNo(), Collections.emptyList()), context))
+                .toList();
 
         Map<String, Object> pageData = new LinkedHashMap<>();
         pageData.put("records", records);
@@ -160,165 +102,155 @@ public class OrderQueryController {
     @PostMapping("/full")
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> createFull(@RequestBody OrderFullCreateRequest request) {
-        if (!StringUtils.hasText(request.getContractId())) {
-            throw new BizException("contractId 不能为空");
+        String contractNo = firstNonBlank(request.getContractNo(), request.getContractId());
+        if (!StringUtils.hasText(contractNo)) {
+            throw new BizException("contractNo不能为空");
         }
         if (request.getDetails() == null || request.getDetails().isEmpty()) {
             throw new BizException("至少需要一条订单明细");
         }
-        ContractMaster contract = contractMasterMapper.selectById(request.getContractId());
+
+        ContractMaster contract = contractMasterMapper.selectById(contractNo);
         if (contract == null) {
             throw new BizException("合同不存在");
         }
-        String resolvedCustomerId = StringUtils.hasText(request.getCustomerId()) ? request.getCustomerId() : contract.getCustomerId();
-        if (!contract.getCustomerId().equals(resolvedCustomerId)) {
-            throw new BizException("订单客户与合同客户不一致");
+
+        OrderMaster existingMaster = orderMasterMapper.selectOne(new LambdaQueryWrapper<OrderMaster>()
+                .eq(OrderMaster::getContractNo, contractNo)
+                .last("limit 1"));
+
+        String orderNo;
+        if (existingMaster == null) {
+            orderNo = firstNonBlank(request.getOrderNo(), request.getOrderId());
+            if (!StringUtils.hasText(orderNo)) {
+                orderNo = "ORD" + DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now());
+            }
+
+            OrderMaster master = new OrderMaster();
+            master.setOrderNo(orderNo);
+            master.setContractNo(contractNo);
+            master.setCustomerId(contract.getCustomerId());
+            master.setTotalAmount(contract.getContractAmount());
+            master.setExpectedDate(request.getExpectedDate());
+            master.setOrderStatus(request.getOrderStatus() == null ? 1 : request.getOrderStatus());
+            master.setRemark(contract.getDeliveryAddress());
+            orderMasterMapper.insert(master);
+        } else {
+            orderNo = existingMaster.getOrderNo();
         }
 
-        Customer customer = customerMapper.selectById(resolvedCustomerId);
-        if (customer == null) {
-            throw new BizException("客户不存在");
-        }
+        Long existedDetailCount = orderDetailMapper.selectCount(new LambdaQueryWrapper<OrderDetail>()
+                .eq(OrderDetail::getOrderNo, orderNo));
+        int nextIndex = (existedDetailCount == null ? 0 : existedDetailCount.intValue()) + 1;
 
-        String orderId = StringUtils.hasText(request.getOrderId())
-                ? request.getOrderId()
-                : "ORD" + DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now());
-        OrderMaster master = new OrderMaster();
-        master.setOrderId(orderId);
-        master.setContractId(request.getContractId());
-        master.setCustomerId(resolvedCustomerId);
-        master.setTotalAmount(request.getTotalAmount() == null ? BigDecimal.ZERO : request.getTotalAmount());
-        master.setExpectedDate(request.getExpectedDate() == null ? LocalDate.now().plusDays(7) : request.getExpectedDate());
-        master.setOrderStatus(request.getOrderStatus() == null ? 1 : request.getOrderStatus());
-        master.setRemark(request.getDeliveryAddress());
-        orderMasterMapper.insert(master);
-
-        int index = 1;
         for (OrderFullCreateRequest.OrderDetailCreateRequest item : request.getDetails()) {
             if (!StringUtils.hasText(item.getProductModel())) {
                 throw new BizException("明细产品型号不能为空");
             }
-            if (item.getAirPermeability() == null) {
-                throw new BizException("明细透气量不能为空");
+            BigDecimal reqLength = item.getReqLength() != null ? item.getReqLength() : toDecimal(item.getLengthReq());
+            BigDecimal reqWidth = item.getReqWidth() != null ? item.getReqWidth() : toDecimal(item.getWidthReq());
+            if (reqLength == null || reqWidth == null) {
+                throw new BizException("明细长度和宽度不能为空");
             }
+
             OrderDetail detail = new OrderDetail();
-            detail.setDetailId(StringUtils.hasText(item.getDetailId())
-                    ? item.getDetailId()
-                    : orderId.replace("ORD", "DET") + String.format("%03d", index++));
-            detail.setOrderId(orderId);
+            detail.setDetailId(resolveDetailId(item.getDetailId(), orderNo, nextIndex++));
+            detail.setOrderNo(orderNo);
             detail.setProductModel(item.getProductModel());
-            detail.setAirPermeability(item.getAirPermeability());
-            detail.setLengthReq(item.getLengthReq() == null ? 0 : item.getLengthReq());
-            detail.setWidthReq(item.getWidthReq() == null ? 0 : item.getWidthReq());
-            detail.setCraftReq(item.getCraftReq());
+            detail.setAirPermeability(item.getAirPermeability() == null ? 0 : item.getAirPermeability());
+            detail.setReqLength(reqLength);
+            detail.setReqWidth(reqWidth);
             detail.setDetailStatus(item.getDetailStatus() == null ? 1 : item.getDetailStatus());
+            detail.setDeliveredQty(item.getDeliveredQty() == null ? 0 : item.getDeliveredQty());
             orderDetailMapper.insert(detail);
         }
 
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("orderId", orderId);
+        data.put("orderNo", orderNo);
+        data.put("orderId", orderNo);
         return success(data);
     }
 
-    private Map<String, Object> toDetailRow(OrderDetail detail, DetailProcessProgress progress) {
+    private Map<String, List<OrderDetail>> buildDetailGroup(List<OrderMaster> masters) {
+        Set<String> orderNos = masters.stream().map(OrderMaster::getOrderNo).collect(Collectors.toSet());
+        List<OrderDetail> details = orderDetailMapper.selectList(new LambdaQueryWrapper<OrderDetail>()
+                .in(OrderDetail::getOrderNo, orderNos)
+                .orderByAsc(OrderDetail::getCreatedAt));
+        return details.stream().collect(Collectors.groupingBy(OrderDetail::getOrderNo));
+    }
+
+    private CustomerContractContext buildCustomerContractContext(String customerName) {
+        List<Customer> customers = customerMapper.selectList(new LambdaQueryWrapper<Customer>()
+                .like(StringUtils.hasText(customerName), Customer::getCustomerName, customerName));
+        if (customers.isEmpty()) {
+            return new CustomerContractContext(Collections.emptyMap(), Collections.emptyMap(), Collections.emptySet());
+        }
+
+        Map<String, String> customerNameMap = customers.stream()
+                .collect(Collectors.toMap(Customer::getCustomerId, Customer::getCustomerName, (a, b) -> a));
+        Set<String> customerIds = customers.stream().map(Customer::getCustomerId).collect(Collectors.toSet());
+
+        List<ContractMaster> contracts = contractMasterMapper.selectList(new LambdaQueryWrapper<ContractMaster>()
+                .in(ContractMaster::getCustomerId, customerIds)
+                .orderByDesc(ContractMaster::getUpdatedAt));
+        Map<String, ContractMaster> contractMap = contracts.stream()
+                .collect(Collectors.toMap(ContractMaster::getContractId, c -> c, (a, b) -> a));
+        return new CustomerContractContext(customerNameMap, contractMap, contractMap.keySet());
+    }
+
+    private Map<String, Object> toOrderRow(OrderMaster master, List<OrderDetail> details, CustomerContractContext context) {
+        ContractMaster contract = context.contractMap().get(master.getContractNo());
+        String customerId = contract == null ? null : contract.getCustomerId();
+        String customerName = customerId == null ? null : context.customerNameMap().get(customerId);
+
         Map<String, Object> row = new LinkedHashMap<>();
-        row.put("detailId", detail.getDetailId());
-        row.put("orderId", detail.getOrderId());
-        row.put("productModel", detail.getProductModel());
-        row.put("airPermeability", detail.getAirPermeability());
-        row.put("lengthReq", detail.getLengthReq());
-        row.put("widthReq", detail.getWidthReq());
-        row.put("craftReq", detail.getCraftReq());
-        row.put("detailStatus", detail.getDetailStatus());
-        row.put("currentProcessType", progress == null ? null : progress.getProcessType());
-        row.put("currentTaskStatus", progress == null ? null : progress.getTaskStatus());
+        row.put("orderNo", master.getOrderNo());
+        row.put("orderId", master.getOrderNo());
+        row.put("contractNo", master.getContractNo());
+        row.put("contractId", master.getContractNo());
+        row.put("customerId", customerId);
+        row.put("customerName", customerName);
+        row.put("signDate", contract == null ? null : contract.getSignDate());
+        row.put("deliveryAddress", contract == null ? null : contract.getDeliveryAddress());
+        row.put("totalAmount", contract == null ? null : contract.getContractAmount());
+        row.put("expectedDate", master.getExpectedDate());
+        row.put("orderStatus", resolveOrderStatus(master.getOrderStatus(), details));
+        row.put("details", details.stream().map(this::toDetailRow).toList());
         return row;
     }
 
-    private Map<String, DetailProcessProgress> buildDetailProgressMap(List<OrderDetail> details) {
-        if (details == null || details.isEmpty()) {
-            return Collections.emptyMap();
-        }
-        Set<String> detailIds = details.stream().map(OrderDetail::getDetailId).collect(Collectors.toSet());
-        List<PlanDetailRelation> relations = planDetailRelationMapper.selectList(
-                new LambdaQueryWrapper<PlanDetailRelation>()
-                        .in(PlanDetailRelation::getDetailId, detailIds)
-                        .orderByDesc(PlanDetailRelation::getCreatedAt)
-        );
-        if (relations.isEmpty()) {
-            return Collections.emptyMap();
-        }
-        Map<String, String> detailBatchMap = new LinkedHashMap<>();
-        for (PlanDetailRelation relation : relations) {
-            detailBatchMap.putIfAbsent(relation.getDetailId(), relation.getBatchId());
-        }
-        Set<String> batchIds = detailBatchMap.values().stream().filter(StringUtils::hasText).collect(Collectors.toSet());
-        if (batchIds.isEmpty()) {
-            return Collections.emptyMap();
-        }
-        List<ProcessTask> tasks = processTaskMapper.selectList(
-                new LambdaQueryWrapper<ProcessTask>()
-                        .in(ProcessTask::getBatchId, batchIds)
-                        .orderByAsc(ProcessTask::getProcessType)
-                        .orderByDesc(ProcessTask::getCreatedAt)
-        );
-        Map<String, List<ProcessTask>> batchTaskMap = tasks.stream().collect(Collectors.groupingBy(ProcessTask::getBatchId));
-        Map<String, DetailProcessProgress> result = new LinkedHashMap<>();
-        detailBatchMap.forEach((detailId, batchId) -> {
-            List<ProcessTask> batchTasks = batchTaskMap.getOrDefault(batchId, Collections.emptyList());
-            DetailProcessProgress progress = resolveProgress(batchTasks);
-            if (progress != null) {
-                result.put(detailId, progress);
-            }
-        });
-        return result;
-    }
-
-    private DetailProcessProgress resolveProgress(List<ProcessTask> tasks) {
-        if (tasks == null || tasks.isEmpty()) {
-            return null;
-        }
-        ProcessTask active = tasks.stream()
-                .filter(t -> t.getStatus() != null && t.getStatus() != 3)
-                .sorted((a, b) -> Integer.compare(a.getProcessType(), b.getProcessType()))
-                .findFirst()
-                .orElse(null);
-        if (active != null) {
-            return new DetailProcessProgress(active.getProcessType(), active.getStatus());
-        }
-        ProcessTask last = tasks.stream()
-                .filter(t -> t.getStatus() != null && t.getStatus() == 3)
-                .max((a, b) -> Integer.compare(a.getProcessType(), b.getProcessType()))
-                .orElse(null);
-        if (last != null) {
-            return new DetailProcessProgress(last.getProcessType(), last.getStatus());
-        }
-        return null;
+    private Map<String, Object> toDetailRow(OrderDetail detail) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("detailId", detail.getDetailId());
+        row.put("orderNo", detail.getOrderNo());
+        row.put("orderId", detail.getOrderNo());
+        row.put("productModel", detail.getProductModel());
+        row.put("airPermeability", detail.getAirPermeability());
+        row.put("reqLength", detail.getReqLength());
+        row.put("reqWidth", detail.getReqWidth());
+        row.put("lengthReq", detail.getReqLength());
+        row.put("widthReq", detail.getReqWidth());
+        row.put("detailStatus", detail.getDetailStatus());
+        row.put("deliveredQty", detail.getDeliveredQty());
+        return row;
     }
 
     private Integer resolveOrderStatus(Integer masterStatus, List<OrderDetail> details) {
         if (details == null || details.isEmpty()) {
             return masterStatus;
         }
-        List<Integer> statuses = details.stream()
-                .map(OrderDetail::getDetailStatus)
-                .filter(v -> v != null)
-                .toList();
+        List<Integer> statuses = details.stream().map(OrderDetail::getDetailStatus).filter(v -> v != null).toList();
         if (statuses.isEmpty()) {
             return masterStatus;
         }
-        boolean allCompleted = statuses.stream().allMatch(v -> v == 5);
-        if (allCompleted) {
-            return 5;
+        if (statuses.stream().allMatch(v -> v == 5)) {
+            return 6;
         }
         if (statuses.stream().anyMatch(v -> v == 4)) {
             return 4;
         }
-        if (statuses.stream().anyMatch(v -> v == 3)) {
+        if (statuses.stream().anyMatch(v -> v == 3 || v == 2)) {
             return 3;
-        }
-        if (statuses.stream().anyMatch(v -> v == 2)) {
-            return 2;
         }
         if (statuses.stream().anyMatch(v -> v == 1)) {
             return 1;
@@ -326,22 +258,31 @@ public class OrderQueryController {
         return masterStatus;
     }
 
-    private static class DetailProcessProgress {
-        private final Integer processType;
-        private final Integer taskStatus;
-
-        private DetailProcessProgress(Integer processType, Integer taskStatus) {
-            this.processType = processType;
-            this.taskStatus = taskStatus;
+    private String resolveDetailId(String requestDetailId, String orderNo, int startIndex) {
+        if (StringUtils.hasText(requestDetailId)) {
+            return requestDetailId;
         }
-
-        public Integer getProcessType() {
-            return processType;
+        int index = Math.max(startIndex, 1);
+        while (true) {
+            String candidate = orderNo.replace("ORD", "DET") + String.format("%03d", index);
+            if (orderDetailMapper.selectById(candidate) == null) {
+                return candidate;
+            }
+            index++;
         }
+    }
 
-        public Integer getTaskStatus() {
-            return taskStatus;
+    private BigDecimal toDecimal(Number value) {
+        return value == null ? null : new BigDecimal(String.valueOf(value));
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
         }
+        return null;
     }
 
     private Map<String, Object> emptyPage(long pageNo, long pageSize) {
@@ -364,15 +305,27 @@ public class OrderQueryController {
         return result;
     }
 
+    private record CustomerContractContext(Map<String, String> customerNameMap,
+                                           Map<String, ContractMaster> contractMap,
+                                           Set<String> contractIds) {
+    }
+
     public static class OrderFullCreateRequest {
+        private String orderNo;
         private String orderId;
+        private String contractNo;
         private String contractId;
-        private String customerId;
-        private BigDecimal totalAmount;
         private LocalDate expectedDate;
         private Integer orderStatus;
-        private String deliveryAddress;
         private List<OrderDetailCreateRequest> details = new ArrayList<>();
+
+        public String getOrderNo() {
+            return orderNo;
+        }
+
+        public void setOrderNo(String orderNo) {
+            this.orderNo = orderNo;
+        }
 
         public String getOrderId() {
             return orderId;
@@ -382,28 +335,20 @@ public class OrderQueryController {
             this.orderId = orderId;
         }
 
+        public String getContractNo() {
+            return contractNo;
+        }
+
+        public void setContractNo(String contractNo) {
+            this.contractNo = contractNo;
+        }
+
         public String getContractId() {
             return contractId;
         }
 
         public void setContractId(String contractId) {
             this.contractId = contractId;
-        }
-
-        public String getCustomerId() {
-            return customerId;
-        }
-
-        public void setCustomerId(String customerId) {
-            this.customerId = customerId;
-        }
-
-        public BigDecimal getTotalAmount() {
-            return totalAmount;
-        }
-
-        public void setTotalAmount(BigDecimal totalAmount) {
-            this.totalAmount = totalAmount;
         }
 
         public LocalDate getExpectedDate() {
@@ -422,14 +367,6 @@ public class OrderQueryController {
             this.orderStatus = orderStatus;
         }
 
-        public String getDeliveryAddress() {
-            return deliveryAddress;
-        }
-
-        public void setDeliveryAddress(String deliveryAddress) {
-            this.deliveryAddress = deliveryAddress;
-        }
-
         public List<OrderDetailCreateRequest> getDetails() {
             return details;
         }
@@ -442,10 +379,12 @@ public class OrderQueryController {
             private String detailId;
             private String productModel;
             private Integer airPermeability;
-            private Integer lengthReq;
-            private Integer widthReq;
-            private String craftReq;
+            private BigDecimal reqLength;
+            private BigDecimal reqWidth;
+            private Number lengthReq;
+            private Number widthReq;
             private Integer detailStatus;
+            private Integer deliveredQty;
 
             public String getDetailId() {
                 return detailId;
@@ -463,10 +402,6 @@ public class OrderQueryController {
                 this.productModel = productModel;
             }
 
-            public Integer getLengthReq() {
-                return lengthReq;
-            }
-
             public Integer getAirPermeability() {
                 return airPermeability;
             }
@@ -475,24 +410,36 @@ public class OrderQueryController {
                 this.airPermeability = airPermeability;
             }
 
-            public void setLengthReq(Integer lengthReq) {
+            public BigDecimal getReqLength() {
+                return reqLength;
+            }
+
+            public void setReqLength(BigDecimal reqLength) {
+                this.reqLength = reqLength;
+            }
+
+            public BigDecimal getReqWidth() {
+                return reqWidth;
+            }
+
+            public void setReqWidth(BigDecimal reqWidth) {
+                this.reqWidth = reqWidth;
+            }
+
+            public Number getLengthReq() {
+                return lengthReq;
+            }
+
+            public void setLengthReq(Number lengthReq) {
                 this.lengthReq = lengthReq;
             }
 
-            public Integer getWidthReq() {
+            public Number getWidthReq() {
                 return widthReq;
             }
 
-            public void setWidthReq(Integer widthReq) {
+            public void setWidthReq(Number widthReq) {
                 this.widthReq = widthReq;
-            }
-
-            public String getCraftReq() {
-                return craftReq;
-            }
-
-            public void setCraftReq(String craftReq) {
-                this.craftReq = craftReq;
             }
 
             public Integer getDetailStatus() {
@@ -501,6 +448,14 @@ public class OrderQueryController {
 
             public void setDetailStatus(Integer detailStatus) {
                 this.detailStatus = detailStatus;
+            }
+
+            public Integer getDeliveredQty() {
+                return deliveredQty;
+            }
+
+            public void setDeliveredQty(Integer deliveredQty) {
+                this.deliveredQty = deliveredQty;
             }
         }
     }

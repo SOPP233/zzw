@@ -5,8 +5,8 @@
 <mapper namespace="com.lw.backend.modules.mes.mapper.OrderMasterMapper">
 
     <resultMap id="BaseResultMap" type="com.lw.backend.modules.mes.entity.OrderMaster">
-        <id column="order_id" property="orderId"/>
-        <result column="contract_id" property="contractId"/>
+        <id column="order_no" property="orderNo"/>
+        <result column="contract_no" property="contractNo"/>
         <result column="customer_id" property="customerId"/>
         <result column="total_amount" property="totalAmount"/>
         <result column="expected_date" property="expectedDate"/>
@@ -17,7 +17,7 @@
     </resultMap>
 
     <sql id="Base_Column_List">
-        order_id, contract_id, customer_id, total_amount, expected_date, order_status, remark, created_at, updated_at
+        order_no, contract_no, customer_id, total_amount, expected_date, order_status, remark, created_at, updated_at
     </sql>
 
 </mapper>

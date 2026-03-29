@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -14,19 +15,19 @@ public class OrderDetail {
     @TableId(value = "detail_id", type = IdType.INPUT)
     private String detailId;
 
-    private String orderId;
+    private String orderNo;
 
     private String productModel;
 
     private Integer airPermeability;
 
-    private Integer lengthReq;
+    private BigDecimal reqLength;
 
-    private Integer widthReq;
-
-    private String craftReq;
+    private BigDecimal reqWidth;
 
     private Integer detailStatus;
+
+    private Integer deliveredQty;
 
     private LocalDateTime createdAt;
 

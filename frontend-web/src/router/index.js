@@ -4,7 +4,13 @@ import { hasRouteAccess, useAuthStore } from "../stores/auth";
 
 const OrderList = () => import("../views/order/OrderList.vue");
 const OrderManage = () => import("../views/order/OrderManage.vue");
+const ScheduleWorkbench = () => import("../views/ScheduleWorkbench.vue");
 const ProductionReview = () => import("../views/production/ProductionReview.vue");
+const WeavingOrders = () => import("../views/production/WeavingOrders.vue");
+const SettingOrders = () => import("../views/production/SettingOrders.vue");
+const CuttingOrders = () => import("../views/production/CuttingOrders.vue");
+const SplicingOrders = () => import("../views/production/SplicingOrders.vue");
+const SecSettingOrders = () => import("../views/production/SecSettingOrders.vue");
 const BasicProducts = () => import("../views/basic/BasicProducts.vue");
 const BasicEquipments = () => import("../views/basic/BasicEquipments.vue");
 const RawMaterialInventory = () => import("../views/inventory/RawMaterialInventory.vue");
@@ -22,7 +28,13 @@ const routes = [
     children: [
       { path: "orders/tracking", name: "OrderTracking", component: OrderList },
       { path: "orders/manage", name: "OrderManage", component: OrderManage },
+      { path: "production/workbench", name: "ScheduleWorkbench", component: ScheduleWorkbench },
       { path: "production/review", name: "ProductionReview", component: ProductionReview },
+      { path: "production/weaving-orders", name: "WeavingOrders", component: WeavingOrders },
+      { path: "production/setting-orders", name: "SettingOrders", component: SettingOrders },
+      { path: "production/cutting-orders", name: "CuttingOrders", component: CuttingOrders },
+      { path: "production/splicing-orders", name: "SplicingOrders", component: SplicingOrders },
+      { path: "production/sec-setting-orders", name: "SecSettingOrders", component: SecSettingOrders },
       { path: "basic/products", name: "BasicProducts", component: BasicProducts },
       { path: "basic/equipments", name: "BasicEquipments", component: BasicEquipments },
       { path: "inventory/ledger", name: "InventoryLedger", redirect: "/inventory/raw-materials" },

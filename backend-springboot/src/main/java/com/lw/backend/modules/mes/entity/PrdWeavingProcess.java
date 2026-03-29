@@ -6,30 +6,28 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("order_master")
-public class OrderMaster {
+@TableName("prd_weaving_process")
+public class PrdWeavingProcess {
 
-    @TableId(value = "order_no", type = IdType.INPUT)
-    private String orderNo;
+    @TableId(value = "weaving_batch_no", type = IdType.INPUT)
+    private String weavingBatchNo;
 
-    private String contractNo;
+    private String machineId;
 
-    private String customerId;
+    private String operatorId;
 
-    private BigDecimal totalAmount;
+    private BigDecimal actualLength;
 
-    private LocalDate expectedDate;
+    private BigDecimal actualWidth;
 
-    private Integer orderStatus;
+    private Integer processStatus;
 
-    private String remark;
+    private LocalDateTime completedAt;
 
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
 }
-

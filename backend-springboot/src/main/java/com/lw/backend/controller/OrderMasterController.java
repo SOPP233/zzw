@@ -33,7 +33,7 @@ public class OrderMasterController {
 
     @PutMapping("/{id}")
     public Map<String, Object> update(@PathVariable String id, @RequestBody OrderMaster data) {
-        data.setOrderId(id);
+        data.setOrderNo(id);
         return affected(mapper.updateById(data));
     }
 
@@ -50,19 +50,19 @@ public class OrderMasterController {
     @GetMapping
     public Map<String, Object> page(@RequestParam(defaultValue = "1") long pageNo,
                                     @RequestParam(defaultValue = "10") long pageSize,
-                                    @RequestParam(required = false) String orderId,
+                                    @RequestParam(required = false) String orderNo,
                                     @RequestParam(required = false) Integer orderStatus,
-                                    @RequestParam(required = false) String customerId) {
+                                    @RequestParam(required = false) String contractNo) {
         QueryWrapper<OrderMaster> wrapper = new QueryWrapper<OrderMaster>()
                 .orderByDesc("created_at");
-        if (StringUtils.hasText(orderId)) {
-            wrapper.like("order_id", orderId);
+        if (StringUtils.hasText(orderNo)) {
+            wrapper.like("order_no", orderNo);
         }
         if (orderStatus != null) {
             wrapper.eq("order_status", orderStatus);
         }
-        if (StringUtils.hasText(customerId)) {
-            wrapper.eq("customer_id", customerId);
+        if (StringUtils.hasText(contractNo)) {
+            wrapper.eq("contract_no", contractNo);
         }
         IPage<OrderMaster> result = mapper.selectPage(new Page<>(pageNo, pageSize), wrapper);
         return successWithData(result);
@@ -84,7 +84,7 @@ public class OrderMasterController {
         int detailAffected = orderDetailMapper.update(
                 null,
                 new LambdaUpdateWrapper<OrderDetail>()
-                        .eq(OrderDetail::getOrderId, id)
+                        .eq(OrderDetail::getOrderNo, id)
                         .set(OrderDetail::getDetailStatus, 2)
         );
 
