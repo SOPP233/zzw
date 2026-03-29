@@ -11,24 +11,12 @@
 
         <el-sub-menu
           v-if="
-            visible('/production/workbench') ||
-            visible('/production/review') ||
-            visible('/production/tasks/weaving') ||
-            visible('/production/tasks/setting') ||
-            visible('/production/tasks/cutting') ||
-            visible('/production/tasks/jointing') ||
-            visible('/production/tasks/reshaping')
+            visible('/production/review')
           "
           index="/production"
         >
           <template #title>生产协同</template>
-          <el-menu-item v-if="visible('/production/workbench')" index="/production/workbench">排产工作台</el-menu-item>
           <el-menu-item v-if="visible('/production/review')" index="/production/review">生产审核</el-menu-item>
-          <el-menu-item v-if="visible('/production/tasks/weaving')" index="/production/tasks/weaving">织造任务</el-menu-item>
-          <el-menu-item v-if="visible('/production/tasks/setting')" index="/production/tasks/setting">定型任务</el-menu-item>
-          <el-menu-item v-if="visible('/production/tasks/cutting')" index="/production/tasks/cutting">裁网任务</el-menu-item>
-          <el-menu-item v-if="visible('/production/tasks/jointing')" index="/production/tasks/jointing">插接任务</el-menu-item>
-          <el-menu-item v-if="visible('/production/tasks/reshaping')" index="/production/tasks/reshaping">二次定型任务</el-menu-item>
         </el-sub-menu>
 
         <el-sub-menu v-if="visible('/basic/products') || visible('/basic/equipments')" index="/basic">
@@ -37,7 +25,20 @@
           <el-menu-item v-if="visible('/basic/equipments')" index="/basic/equipments">设备与产能模型</el-menu-item>
         </el-sub-menu>
 
-        <el-menu-item v-if="visible('/inventory/ledger')" index="/inventory/ledger">库存管理</el-menu-item>
+        <el-sub-menu
+          v-if="
+            visible('/inventory/raw-materials') ||
+            visible('/inventory/wip') ||
+            visible('/inventory/finished-goods') ||
+            visible('/inventory/ledger')
+          "
+          index="/inventory"
+        >
+          <template #title>库存管理</template>
+          <el-menu-item v-if="visible('/inventory/raw-materials')" index="/inventory/raw-materials">原材料库</el-menu-item>
+          <el-menu-item v-if="visible('/inventory/wip')" index="/inventory/wip">半成品库</el-menu-item>
+          <el-menu-item v-if="visible('/inventory/finished-goods')" index="/inventory/finished-goods">成品库</el-menu-item>
+        </el-sub-menu>
         <el-menu-item v-if="visible('/stats/dashboard')" index="/stats/dashboard">数据统计</el-menu-item>
       </el-menu>
     </aside>

@@ -9,6 +9,7 @@ import com.lw.backend.modules.mes.entity.ProcessTask;
 import com.lw.backend.modules.mes.entity.ProductionPlan;
 import com.lw.backend.modules.mes.exception.BizException;
 import com.lw.backend.modules.mes.mapper.OrderDetailMapper;
+import com.lw.backend.modules.mes.mapper.OrderMasterMapper;
 import com.lw.backend.modules.mes.mapper.PlanDetailRelationMapper;
 import com.lw.backend.modules.mes.mapper.ProcessTaskMapper;
 import com.lw.backend.modules.mes.mapper.ProductionPlanMapper;
@@ -53,8 +54,10 @@ public class MergeScheduleServiceImpl implements MergeScheduleService {
      * production_plan 状态：1=加工中
      */
     private static final int PLAN_STATUS_PROCESSING = 1;
+    private static final int ORDER_STATUS_IN_PRODUCTION = 3;
 
     private final OrderDetailMapper orderDetailMapper;
+    private final OrderMasterMapper orderMasterMapper;
     private final ProductionPlanMapper productionPlanMapper;
     private final PlanDetailRelationMapper planDetailRelationMapper;
     private final ProcessTaskMapper processTaskMapper;
@@ -69,6 +72,7 @@ public class MergeScheduleServiceImpl implements MergeScheduleService {
 
         String batchId = createProductionPlan(request.getMachineId());
         bindDetailsToBatchAndUpdateStatus(batchId, details);
+        updateOrderMasterStatus(details);
         String taskId = createFirstProcessTask(batchId);
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -165,6 +169,20 @@ public class MergeScheduleServiceImpl implements MergeScheduleService {
             throw new BizException("创建首道工序任务失败");
         }
         return taskId;
+    }
+
+    private void updateOrderMasterStatus(List<OrderDetail> details) {
+        Set<String> orderIds = details.stream().map(OrderDetail::getOrderId).collect(Collectors.toSet());
+        if (orderIds.isEmpty()) {
+            return;
+        }
+        int rows = orderMasterMapper.update(
+                null,
+                new LambdaUpdateWrapper<com.lw.backend.modules.mes.entity.OrderMaster>()
+                        .in(com.lw.backend.modules.mes.entity.OrderMaster::getOrderId, orderIds)
+                        .set(com.lw.backend.modules.mes.entity.OrderMaster::getOrderStatus, ORDER_STATUS_IN_PRODUCTION)
+        );
+        log.info("订单主单状态更新完成，影响行数: {}", rows);
     }
 
     private String generateBatchId() {

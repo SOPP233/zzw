@@ -1,4 +1,4 @@
-﻿-- =========================================================
+-- =========================================================
 -- 离散制造 MES 核心库表 DDL（MySQL 8.0）
 -- 字符集：utf8mb4，排序规则：utf8mb4_0900_ai_ci
 -- 说明：
@@ -12,13 +12,10 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- -----------------------------
 -- 0. 按依赖顺序清表（可重复执行）
 -- -----------------------------
+DROP TABLE IF EXISTS `process_task`;
+DROP TABLE IF EXISTS `plan_detail_relation`;
+DROP TABLE IF EXISTS `production_plan`;
 DROP TABLE IF EXISTS `order_detail`;
-DROP TABLE IF EXISTS `prd_sec_setting_process`;
-DROP TABLE IF EXISTS `prd_splicing_process`;
-DROP TABLE IF EXISTS `prd_cutting_process`;
-DROP TABLE IF EXISTS `map_order_weaving`;
-DROP TABLE IF EXISTS `prd_setting_process`;
-DROP TABLE IF EXISTS `prd_weaving_process`;
 DROP TABLE IF EXISTS `order_master`;
 DROP TABLE IF EXISTS `contract_master`;
 DROP TABLE IF EXISTS `material_inventory`;
@@ -176,174 +173,125 @@ CREATE TABLE `sys_role_menu` (
 -- 3. 订单管理
 -- -----------------------------
 CREATE TABLE `order_master` (
-  `order_no` VARCHAR(32) NOT NULL COMMENT '内部生产订单全局唯一标识',
-  `contract_no` VARCHAR(32) NOT NULL COMMENT '所属合同编号（外键）',
-  `expected_date` DATE DEFAULT NULL COMMENT '客户期望整体完工交付日期',
-  `order_status` TINYINT(3) NOT NULL DEFAULT 0 COMMENT '宏观状态：0草稿，1审核中，2待排产，3生产中，4部分入库，5已发货，6已完结',
+  `order_id` VARCHAR(30) NOT NULL COMMENT '订单号（主键，示例：ORD20260327001）',
+  `contract_id` VARCHAR(30) NOT NULL COMMENT '合同编号（外键）',
+  `customer_id` VARCHAR(64) NOT NULL COMMENT '客户ID（外键）',
+  `total_amount` DECIMAL(18,2) NOT NULL DEFAULT 0.00 COMMENT '合同总金额',
+  `expected_date` DATE NOT NULL COMMENT '预期交期',
+  `order_status` TINYINT NOT NULL DEFAULT 1 COMMENT '订单状态：1审核中，2待排产，3生产中，4部分入库，5已完结',
+  `remark` VARCHAR(255) DEFAULT NULL COMMENT '备注',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`order_no`),
-  KEY `idx_order_master_contract_no` (`contract_no`),
+  PRIMARY KEY (`order_id`),
+  KEY `idx_order_master_contract_id` (`contract_id`),
+  KEY `idx_order_master_customer_id` (`customer_id`),
   KEY `idx_order_master_status_expected` (`order_status`, `expected_date`),
-  CONSTRAINT `fk_order_master_contract_no`
-    FOREIGN KEY (`contract_no`) REFERENCES `contract_master` (`contract_id`)
+  CONSTRAINT `fk_order_master_contract_id`
+    FOREIGN KEY (`contract_id`) REFERENCES `contract_master` (`contract_id`)
     ON UPDATE CASCADE ON DELETE RESTRICT,
-  CONSTRAINT `ck_order_master_status` CHECK (`order_status` IN (0, 1, 2, 3, 4, 5, 6))
+  CONSTRAINT `fk_order_master_customer_id`
+    FOREIGN KEY (`customer_id`) REFERENCES `customer` (`customer_id`)
+    ON UPDATE CASCADE ON DELETE RESTRICT,
+  CONSTRAINT `ck_order_master_status` CHECK (`order_status` IN (1, 2, 3, 4, 5))
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='订单主表（承载批次级全局属性）';
+  COMMENT='订单主表';
 
 CREATE TABLE `order_detail` (
-  `detail_id` VARCHAR(32) NOT NULL COMMENT '订单明细唯一编码（主键）',
-  `order_no` VARCHAR(32) NOT NULL COMMENT '所属订单编号（外键）',
-  `product_model` VARCHAR(50) NOT NULL COMMENT '客户定制造纸网型号',
-  `req_length` DECIMAL(10,2) NOT NULL COMMENT '要求长度（米）',
-  `req_width` DECIMAL(10,2) NOT NULL COMMENT '要求宽度（米）',
-  `detail_status` TINYINT(3) NOT NULL DEFAULT 1 COMMENT '微观状态：1待合批，2已汇入大网，3已裁切分离，4插接中，5已入库',
-  `delivered_qty` INT(11) NOT NULL DEFAULT 0 COMMENT '实际已完成入库并交货数量',
+  `detail_id` VARCHAR(30) NOT NULL COMMENT '订单明细ID（主键）',
+  `order_id` VARCHAR(30) NOT NULL COMMENT '订单号（外键关联order_master.order_id）',
+  `product_model` VARCHAR(30) NOT NULL COMMENT '产品型号',
+  `air_permeability` INT NOT NULL DEFAULT 0 COMMENT '透气量',
+  `length_req` INT NOT NULL COMMENT '定制长度要求',
+  `width_req` INT NOT NULL COMMENT '定制宽度要求',
+  `craft_req` VARCHAR(200) DEFAULT NULL COMMENT '特殊工艺要求',
+  `detail_status` TINYINT NOT NULL DEFAULT 1 COMMENT '明细状态（可按业务字典扩展）',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`detail_id`),
-  KEY `idx_order_detail_order_no` (`order_no`),
+  KEY `idx_order_detail_order_id` (`order_id`),
   KEY `idx_order_detail_model_status` (`product_model`, `detail_status`),
-  CONSTRAINT `fk_order_detail_order_no`
-    FOREIGN KEY (`order_no`) REFERENCES `order_master` (`order_no`)
-    ON UPDATE CASCADE ON DELETE RESTRICT,
-  CONSTRAINT `ck_order_detail_status` CHECK (`detail_status` IN (1, 2, 3, 4, 5)),
-  CONSTRAINT `ck_order_detail_delivered_qty` CHECK (`delivered_qty` >= 0)
+  KEY `idx_order_detail_model_permeability_status` (`product_model`, `air_permeability`, `detail_status`),
+  CONSTRAINT `fk_order_detail_order_id`
+    FOREIGN KEY (`order_id`) REFERENCES `order_master` (`order_id`)
+    ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='订单明细表（最小不可分割执行单元）';
+  COMMENT='订单明细表（合批排产关键来源）';
 
 -- -----------------------------
--- 4. 工序流转与合批拆批执行模型
+-- 4. 生产计划与工序流转
 -- -----------------------------
-CREATE TABLE `prd_weaving_process` (
-  `weaving_batch_no` VARCHAR(32) NOT NULL COMMENT '织造大网批次号（主键）',
-  `machine_id` VARCHAR(32) NOT NULL COMMENT '执行织造任务的设备编号',
-  `operator_id` VARCHAR(32) DEFAULT NULL COMMENT '操作员工号',
-  `actual_length` DECIMAL(10,2) DEFAULT NULL COMMENT '实际总下机长度（米）',
-  `process_status` TINYINT(3) NOT NULL COMMENT '工序状态：1待开机，2织造中，3已完工',
-  `completed_at` DATETIME DEFAULT NULL COMMENT '实际织造完工时间',
+CREATE TABLE `production_plan` (
+  `batch_id` VARCHAR(64) NOT NULL COMMENT '生产批次号（主键，示例：BAT260327001）',
+  `machine_id` VARCHAR(64) NOT NULL COMMENT '织机/设备编号',
+  `plan_start_date` DATE NOT NULL COMMENT '计划开工日期',
+  `actual_start_time` DATETIME DEFAULT NULL COMMENT '实际开工时间',
+  `plan_status` TINYINT NOT NULL DEFAULT 0 COMMENT '计划状态：0等待领料，1加工中，2已完结，9异常阻塞',
+  `created_by` VARCHAR(64) DEFAULT NULL COMMENT '计划创建人（可关联sys_user.user_id）',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`weaving_batch_no`),
-  KEY `idx_prd_weaving_machine_status` (`machine_id`, `process_status`),
-  KEY `idx_prd_weaving_operator` (`operator_id`),
-  CONSTRAINT `ck_prd_weaving_status` CHECK (`process_status` IN (1, 2, 3))
+  PRIMARY KEY (`batch_id`),
+  KEY `idx_production_plan_machine_status` (`machine_id`, `plan_status`),
+  KEY `idx_production_plan_start_date` (`plan_start_date`),
+  CONSTRAINT `ck_production_plan_status` CHECK (`plan_status` IN (0, 1, 2, 9))
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='织造执行表（承载大网母卷从开机到下线的数据）';
+  COMMENT='生产批次计划表';
 
-CREATE TABLE `prd_setting_process` (
-  `setting_batch_no` VARCHAR(32) NOT NULL COMMENT '定型工序批次号（主键）',
-  `weaving_batch_no` VARCHAR(32) NOT NULL COMMENT '上游织造批次号（外键）',
-  `operator_id` VARCHAR(32) DEFAULT NULL COMMENT '定型监控员工工号',
-  `process_status` TINYINT(3) NOT NULL COMMENT '工序状态：1接收待定型，2定型加热中，3已完工',
-  `completed_at` DATETIME DEFAULT NULL COMMENT '定型完工时间',
+CREATE TABLE `plan_detail_relation` (
+  `relation_id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '关系ID（自增主键）',
+  `batch_id` VARCHAR(64) NOT NULL COMMENT '批次号（外键）',
+  `detail_id` VARCHAR(30) NOT NULL COMMENT '订单明细ID（外键）',
+  `allocated_qty` DECIMAL(18,3) DEFAULT NULL COMMENT '该明细分配到该批次的数量',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`setting_batch_no`),
-  UNIQUE KEY `uk_prd_setting_weaving_batch_no` (`weaving_batch_no`),
-  KEY `idx_prd_setting_operator` (`operator_id`),
-  CONSTRAINT `fk_prd_setting_weaving_batch_no`
-    FOREIGN KEY (`weaving_batch_no`) REFERENCES `prd_weaving_process` (`weaving_batch_no`)
+  PRIMARY KEY (`relation_id`),
+  UNIQUE KEY `uk_plan_detail_batch_detail` (`batch_id`, `detail_id`),
+  KEY `idx_plan_detail_detail_id` (`detail_id`),
+  KEY `idx_plan_detail_batch_id` (`batch_id`),
+  CONSTRAINT `fk_plan_detail_relation_batch_id`
+    FOREIGN KEY (`batch_id`) REFERENCES `production_plan` (`batch_id`)
     ON UPDATE CASCADE ON DELETE RESTRICT,
-  CONSTRAINT `ck_prd_setting_status` CHECK (`process_status` IN (1, 2, 3))
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='定型执行表（与织造母卷一对一流转）';
-
-CREATE TABLE `map_order_weaving` (
-  `map_id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '映射主键（自增）',
-  `detail_id` VARCHAR(32) NOT NULL COMMENT '来源订单明细ID（外键）',
-  `weaving_batch_no` VARCHAR(32) NOT NULL COMMENT '去向织造批次号（外键）',
-  `map_qty` INT(11) NOT NULL COMMENT '分配到该织造批次的数量',
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  PRIMARY KEY (`map_id`),
-  UNIQUE KEY `uk_map_order_weaving_detail_batch` (`detail_id`, `weaving_batch_no`),
-  KEY `idx_map_order_weaving_batch` (`weaving_batch_no`),
-  CONSTRAINT `fk_map_order_weaving_detail_id`
+  CONSTRAINT `fk_plan_detail_relation_detail_id`
     FOREIGN KEY (`detail_id`) REFERENCES `order_detail` (`detail_id`)
-    ON UPDATE CASCADE ON DELETE RESTRICT,
-  CONSTRAINT `fk_map_order_weaving_weaving_batch_no`
-    FOREIGN KEY (`weaving_batch_no`) REFERENCES `prd_weaving_process` (`weaving_batch_no`)
-    ON UPDATE CASCADE ON DELETE RESTRICT,
-  CONSTRAINT `ck_map_order_weaving_qty` CHECK (`map_qty` > 0)
+    ON UPDATE CASCADE ON DELETE RESTRICT
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='大网织造合批映射表（订单明细到织造批次 N:1）';
+  COMMENT='批次与订单明细映射表（支持合批/拆批）';
 
-CREATE TABLE `prd_cutting_process` (
-  `cut_batch_no` VARCHAR(32) NOT NULL COMMENT '裁网后小网独立批次号（主键）',
-  `setting_batch_no` VARCHAR(32) NOT NULL COMMENT '来源定型母卷批次号（外键）',
-  `detail_id` VARCHAR(32) NOT NULL COMMENT '归宿订单明细ID（外键）',
-  `actual_cut_len` DECIMAL(10,2) NOT NULL COMMENT '实际裁切长度',
-  `actual_cut_wid` DECIMAL(10,2) NOT NULL COMMENT '实际裁切宽度',
-  `operator_id` VARCHAR(32) DEFAULT NULL COMMENT '执行裁网员工工号',
-  `process_status` TINYINT(3) NOT NULL COMMENT '状态：1已分离，2流转至插接',
+CREATE TABLE `process_task` (
+  `task_id` VARCHAR(64) NOT NULL COMMENT '工序任务ID（主键）',
+  `batch_id` VARCHAR(64) NOT NULL COMMENT '批次号（外键）',
+  `process_type` TINYINT NOT NULL COMMENT '工序类型：1织造，2定型，3裁网，4插接，5二次定型',
+  `operator_id` VARCHAR(64) DEFAULT NULL COMMENT '操作员工号（外键关联sys_user.user_id）',
+  `status` TINYINT NOT NULL DEFAULT 0 COMMENT '任务状态：0待接收，1执行中，2完工审批，3已闭环',
+  `output_data` JSON DEFAULT NULL COMMENT '工序输出数据(JSON，存放工序差异化参数)',
+  `start_time` DATETIME DEFAULT NULL COMMENT '开始时间',
+  `end_time` DATETIME DEFAULT NULL COMMENT '结束时间',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`cut_batch_no`),
-  KEY `idx_prd_cutting_setting_batch_no` (`setting_batch_no`),
-  KEY `idx_prd_cutting_detail_id` (`detail_id`),
-  KEY `idx_prd_cutting_operator` (`operator_id`),
-  CONSTRAINT `fk_prd_cutting_setting_batch_no`
-    FOREIGN KEY (`setting_batch_no`) REFERENCES `prd_setting_process` (`setting_batch_no`)
+  PRIMARY KEY (`task_id`),
+  KEY `idx_process_task_batch_id` (`batch_id`),
+  KEY `idx_process_task_operator_status` (`operator_id`, `status`),
+  KEY `idx_process_task_type_status` (`process_type`, `status`),
+  CONSTRAINT `fk_process_task_batch_id`
+    FOREIGN KEY (`batch_id`) REFERENCES `production_plan` (`batch_id`)
     ON UPDATE CASCADE ON DELETE RESTRICT,
-  CONSTRAINT `fk_prd_cutting_detail_id`
-    FOREIGN KEY (`detail_id`) REFERENCES `order_detail` (`detail_id`)
-    ON UPDATE CASCADE ON DELETE RESTRICT,
-  CONSTRAINT `ck_prd_cutting_status` CHECK (`process_status` IN (1, 2))
+  CONSTRAINT `fk_process_task_operator_id`
+    FOREIGN KEY (`operator_id`) REFERENCES `sys_user` (`user_id`)
+    ON UPDATE CASCADE ON DELETE SET NULL,
+  CONSTRAINT `ck_process_task_type` CHECK (`process_type` IN (1, 2, 3, 4, 5)),
+  CONSTRAINT `ck_process_task_status` CHECK (`status` IN (0, 1, 2, 3)),
+  CONSTRAINT `ck_process_task_time` CHECK (`end_time` IS NULL OR `start_time` IS NULL OR `end_time` >= `start_time`),
+  CONSTRAINT `ck_process_task_output_json` CHECK (`output_data` IS NULL OR JSON_VALID(`output_data`))
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
   COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='裁网拆批执行表（大网到小网 1:N 裂变）';
-
-CREATE TABLE `prd_splicing_process` (
-  `splice_batch_no` VARCHAR(32) NOT NULL COMMENT '插接工序批次号（主键）',
-  `cut_batch_no` VARCHAR(32) NOT NULL COMMENT '裁网批次号（外键且唯一）',
-  `operator_id` VARCHAR(32) NOT NULL COMMENT '插接操作员工号',
-  `splice_type` VARCHAR(50) DEFAULT NULL COMMENT '插接工艺分类',
-  `process_status` TINYINT(3) NOT NULL COMMENT '状态：1待插接，2插接中，3已完工流转',
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`splice_batch_no`),
-  UNIQUE KEY `uk_prd_splicing_cut_batch_no` (`cut_batch_no`),
-  KEY `idx_prd_splicing_operator` (`operator_id`),
-  CONSTRAINT `fk_prd_splicing_cut_batch_no`
-    FOREIGN KEY (`cut_batch_no`) REFERENCES `prd_cutting_process` (`cut_batch_no`)
-    ON UPDATE CASCADE ON DELETE RESTRICT,
-  CONSTRAINT `ck_prd_splicing_status` CHECK (`process_status` IN (1, 2, 3))
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='插接执行表（单张小网 1:1 流转）';
-
-CREATE TABLE `prd_sec_setting_process` (
-  `final_batch_no` VARCHAR(32) NOT NULL COMMENT '最终成品批次号（主键）',
-  `splice_batch_no` VARCHAR(32) NOT NULL COMMENT '插接批次号（外键且唯一）',
-  `final_length` DECIMAL(10,2) NOT NULL COMMENT '最终固化后长度',
-  `final_width` DECIMAL(10,2) NOT NULL COMMENT '最终固化后宽度',
-  `process_status` TINYINT(3) NOT NULL COMMENT '核心状态：1二次定型中，2待质检，3质检合格，4已转成品入库',
-  `completed_at` DATETIME DEFAULT NULL COMMENT '二次定型完工时间',
-  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`final_batch_no`),
-  UNIQUE KEY `uk_prd_sec_setting_splice_batch_no` (`splice_batch_no`),
-  CONSTRAINT `fk_prd_sec_setting_splice_batch_no`
-    FOREIGN KEY (`splice_batch_no`) REFERENCES `prd_splicing_process` (`splice_batch_no`)
-    ON UPDATE CASCADE ON DELETE RESTRICT,
-  CONSTRAINT `ck_prd_sec_setting_status` CHECK (`process_status` IN (1, 2, 3, 4))
-) ENGINE=InnoDB
-  DEFAULT CHARSET=utf8mb4
-  COLLATE=utf8mb4_0900_ai_ci
-  COMMENT='二次定型与入库前置表（最终 1:1 固化流程）';
+  COMMENT='多态工序任务流转表（用JSON承载差异化工艺数据）';
 
 -- -----------------------------
 -- 5. 库存账本

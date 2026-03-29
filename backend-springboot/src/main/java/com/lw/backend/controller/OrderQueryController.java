@@ -8,10 +8,14 @@ import com.lw.backend.modules.mes.entity.ContractMaster;
 import com.lw.backend.modules.mes.entity.Customer;
 import com.lw.backend.modules.mes.entity.OrderDetail;
 import com.lw.backend.modules.mes.entity.OrderMaster;
+import com.lw.backend.modules.mes.entity.PlanDetailRelation;
+import com.lw.backend.modules.mes.entity.ProcessTask;
 import com.lw.backend.modules.mes.mapper.ContractMasterMapper;
 import com.lw.backend.modules.mes.mapper.CustomerMapper;
 import com.lw.backend.modules.mes.mapper.OrderDetailMapper;
 import com.lw.backend.modules.mes.mapper.OrderMasterMapper;
+import com.lw.backend.modules.mes.mapper.PlanDetailRelationMapper;
+import com.lw.backend.modules.mes.mapper.ProcessTaskMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -43,6 +47,8 @@ public class OrderQueryController {
     private final OrderDetailMapper orderDetailMapper;
     private final CustomerMapper customerMapper;
     private final ContractMasterMapper contractMasterMapper;
+    private final PlanDetailRelationMapper planDetailRelationMapper;
+    private final ProcessTaskMapper processTaskMapper;
 
     @GetMapping
     public Map<String, Object> list(@RequestParam(required = false) String customerName) {
@@ -69,19 +75,21 @@ public class OrderQueryController {
         List<OrderDetail> details = orderDetailMapper.selectList(new LambdaQueryWrapper<OrderDetail>()
                 .in(OrderDetail::getOrderId, orderIds)
                 .orderByAsc(OrderDetail::getCreatedAt));
+        Map<String, DetailProcessProgress> progressMap = buildDetailProgressMap(details);
 
         Map<String, List<OrderDetail>> detailGroup = details.stream()
                 .collect(Collectors.groupingBy(OrderDetail::getOrderId));
 
         List<Map<String, Object>> rows = masters.stream().map(master -> {
+            List<OrderDetail> orderDetails = detailGroup.getOrDefault(master.getOrderId(), Collections.emptyList());
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("orderId", master.getOrderId());
             row.put("customerId", master.getCustomerId());
             row.put("customerName", customerNameMap.get(master.getCustomerId()));
             row.put("expectedDate", master.getExpectedDate());
-            row.put("orderStatus", master.getOrderStatus());
+            row.put("orderStatus", resolveOrderStatus(master.getOrderStatus(), orderDetails));
             row.put("totalAmount", master.getTotalAmount());
-            row.put("details", detailGroup.getOrDefault(master.getOrderId(), Collections.emptyList()));
+            row.put("details", orderDetails.stream().map(detail -> toDetailRow(detail, progressMap.get(detail.getDetailId()))).toList());
             return row;
         }).toList();
 
@@ -119,10 +127,12 @@ public class OrderQueryController {
         List<OrderDetail> details = orderDetailMapper.selectList(new LambdaQueryWrapper<OrderDetail>()
                 .in(OrderDetail::getOrderId, orderIds)
                 .orderByAsc(OrderDetail::getCreatedAt));
+        Map<String, DetailProcessProgress> progressMap = buildDetailProgressMap(details);
         Map<String, List<OrderDetail>> detailGroup = details.stream()
                 .collect(Collectors.groupingBy(OrderDetail::getOrderId));
 
         List<Map<String, Object>> records = masters.stream().map(master -> {
+            List<OrderDetail> orderDetails = detailGroup.getOrDefault(master.getOrderId(), Collections.emptyList());
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("orderId", master.getOrderId());
             row.put("contractId", master.getContractId());
@@ -132,9 +142,9 @@ public class OrderQueryController {
             row.put("totalAmount", master.getTotalAmount());
             row.put("deliveryAddress", master.getRemark());
             row.put("expectedDate", master.getExpectedDate());
-            row.put("orderStatus", master.getOrderStatus());
-            row.put("details", detailGroup.getOrDefault(master.getOrderId(), Collections.emptyList()).stream()
-                    .map(this::toDetailRow)
+            row.put("orderStatus", resolveOrderStatus(master.getOrderStatus(), orderDetails));
+            row.put("details", orderDetails.stream()
+                    .map(detail -> toDetailRow(detail, progressMap.get(detail.getDetailId())))
                     .toList());
             return row;
         }).toList();
@@ -210,7 +220,7 @@ public class OrderQueryController {
         return success(data);
     }
 
-    private Map<String, Object> toDetailRow(OrderDetail detail) {
+    private Map<String, Object> toDetailRow(OrderDetail detail, DetailProcessProgress progress) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("detailId", detail.getDetailId());
         row.put("orderId", detail.getOrderId());
@@ -220,7 +230,118 @@ public class OrderQueryController {
         row.put("widthReq", detail.getWidthReq());
         row.put("craftReq", detail.getCraftReq());
         row.put("detailStatus", detail.getDetailStatus());
+        row.put("currentProcessType", progress == null ? null : progress.getProcessType());
+        row.put("currentTaskStatus", progress == null ? null : progress.getTaskStatus());
         return row;
+    }
+
+    private Map<String, DetailProcessProgress> buildDetailProgressMap(List<OrderDetail> details) {
+        if (details == null || details.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Set<String> detailIds = details.stream().map(OrderDetail::getDetailId).collect(Collectors.toSet());
+        List<PlanDetailRelation> relations = planDetailRelationMapper.selectList(
+                new LambdaQueryWrapper<PlanDetailRelation>()
+                        .in(PlanDetailRelation::getDetailId, detailIds)
+                        .orderByDesc(PlanDetailRelation::getCreatedAt)
+        );
+        if (relations.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Map<String, String> detailBatchMap = new LinkedHashMap<>();
+        for (PlanDetailRelation relation : relations) {
+            detailBatchMap.putIfAbsent(relation.getDetailId(), relation.getBatchId());
+        }
+        Set<String> batchIds = detailBatchMap.values().stream().filter(StringUtils::hasText).collect(Collectors.toSet());
+        if (batchIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<ProcessTask> tasks = processTaskMapper.selectList(
+                new LambdaQueryWrapper<ProcessTask>()
+                        .in(ProcessTask::getBatchId, batchIds)
+                        .orderByAsc(ProcessTask::getProcessType)
+                        .orderByDesc(ProcessTask::getCreatedAt)
+        );
+        Map<String, List<ProcessTask>> batchTaskMap = tasks.stream().collect(Collectors.groupingBy(ProcessTask::getBatchId));
+        Map<String, DetailProcessProgress> result = new LinkedHashMap<>();
+        detailBatchMap.forEach((detailId, batchId) -> {
+            List<ProcessTask> batchTasks = batchTaskMap.getOrDefault(batchId, Collections.emptyList());
+            DetailProcessProgress progress = resolveProgress(batchTasks);
+            if (progress != null) {
+                result.put(detailId, progress);
+            }
+        });
+        return result;
+    }
+
+    private DetailProcessProgress resolveProgress(List<ProcessTask> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return null;
+        }
+        ProcessTask active = tasks.stream()
+                .filter(t -> t.getStatus() != null && t.getStatus() != 3)
+                .sorted((a, b) -> Integer.compare(a.getProcessType(), b.getProcessType()))
+                .findFirst()
+                .orElse(null);
+        if (active != null) {
+            return new DetailProcessProgress(active.getProcessType(), active.getStatus());
+        }
+        ProcessTask last = tasks.stream()
+                .filter(t -> t.getStatus() != null && t.getStatus() == 3)
+                .max((a, b) -> Integer.compare(a.getProcessType(), b.getProcessType()))
+                .orElse(null);
+        if (last != null) {
+            return new DetailProcessProgress(last.getProcessType(), last.getStatus());
+        }
+        return null;
+    }
+
+    private Integer resolveOrderStatus(Integer masterStatus, List<OrderDetail> details) {
+        if (details == null || details.isEmpty()) {
+            return masterStatus;
+        }
+        List<Integer> statuses = details.stream()
+                .map(OrderDetail::getDetailStatus)
+                .filter(v -> v != null)
+                .toList();
+        if (statuses.isEmpty()) {
+            return masterStatus;
+        }
+        boolean allCompleted = statuses.stream().allMatch(v -> v == 5);
+        if (allCompleted) {
+            return 5;
+        }
+        if (statuses.stream().anyMatch(v -> v == 4)) {
+            return 4;
+        }
+        if (statuses.stream().anyMatch(v -> v == 3)) {
+            return 3;
+        }
+        if (statuses.stream().anyMatch(v -> v == 2)) {
+            return 2;
+        }
+        if (statuses.stream().anyMatch(v -> v == 1)) {
+            return 1;
+        }
+        return masterStatus;
+    }
+
+    private static class DetailProcessProgress {
+        private final Integer processType;
+        private final Integer taskStatus;
+
+        private DetailProcessProgress(Integer processType, Integer taskStatus) {
+            this.processType = processType;
+            this.taskStatus = taskStatus;
+        }
+
+        public Integer getProcessType() {
+            return processType;
+        }
+
+        public Integer getTaskStatus() {
+            return taskStatus;
+        }
     }
 
     private Map<String, Object> emptyPage(long pageNo, long pageSize) {

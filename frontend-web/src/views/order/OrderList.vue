@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page">
     <el-card shadow="never">
       <template #header>
@@ -39,6 +39,11 @@
                 <el-table-column prop="lengthReq" label="长度" width="100" />
                 <el-table-column prop="widthReq" label="宽度" width="100" />
                 <el-table-column prop="craftReq" label="工艺要求" min-width="150" />
+                <el-table-column label="当前工序" min-width="170">
+                  <template #default="{ row: detail }">
+                    <el-tag size="small" type="warning">{{ processStageText(detail) }}</el-tag>
+                  </template>
+                </el-table-column>
                 <el-table-column label="明细状态" min-width="120">
                   <template #default="{ row: detail }">
                     <el-tag size="small">{{ detailStatusText(detail.detailStatus) }}</el-tag>
@@ -51,7 +56,7 @@
 
         <el-table-column prop="orderId" label="订单号" min-width="180" />
         <el-table-column prop="customerName" label="客户" min-width="150" />
-        <el-table-column prop="expectedDate" label="交货时间" min-width="140" />
+        <el-table-column prop="expectedDate" label="交付时间" min-width="140" />
         <el-table-column label="总状态" min-width="120">
           <template #default="{ row }">
             <el-tag>{{ orderStatusText(row.orderStatus) }}</el-tag>
@@ -75,12 +80,34 @@ const query = reactive({
   customerName: ""
 });
 
-const orderStatusText = (status) => {
-  return ORDER_STATUS_MAP[status] || "未知";
+const PROCESS_TYPE_TEXT = {
+  1: "织造",
+  2: "定型",
+  3: "裁网",
+  4: "插接",
+  5: "二次定型"
 };
 
-const detailStatusText = (status) => {
-  return ORDER_DETAIL_STATUS_MAP[status] || "未知";
+const TASK_STATUS_TEXT = {
+  0: "待接收",
+  1: "执行中",
+  2: "完工审批",
+  3: "已完成"
+};
+
+const orderStatusText = (status) => ORDER_STATUS_MAP[status] || "未知";
+const detailStatusText = (status) => ORDER_DETAIL_STATUS_MAP[status] || "未知";
+
+const processStageText = (detail) => {
+  const processName = PROCESS_TYPE_TEXT[detail.currentProcessType];
+  const taskStatus = TASK_STATUS_TEXT[detail.currentTaskStatus];
+  if (processName) {
+    return taskStatus ? `${processName} / ${taskStatus}` : processName;
+  }
+  if (detail.detailStatus >= 3) {
+    return "已投产，工序任务同步中";
+  }
+  return "未投产";
 };
 
 const normalizeOrderRows = (payload) => {
@@ -106,7 +133,6 @@ const fetchOrders = async () => {
     });
     orders.value = normalizeOrderRows(res?.data ?? res);
   } catch (error) {
-    // 兼容后端尚未加载 /api/orders 的场景，临时降级读取基础订单列表
     if (error?.response?.status === 404) {
       const fallback = await request.get("/api/order-masters", {
         params: {
