@@ -35,7 +35,7 @@ public class MergeScheduleController {
         long safePageSize = Math.max(pageSize, 1);
         long offset = (safePageNo - 1) * safePageSize;
 
-        StringBuilder where = new StringBuilder(" WHERE d.detail_status = 1 ");
+        StringBuilder where = new StringBuilder(" WHERE d.detail_status = 0 ");
         List<Object> args = new ArrayList<>();
         if (StringUtils.hasText(orderNo)) {
             where.append(" AND d.order_no LIKE ? ");

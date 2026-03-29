@@ -12,13 +12,14 @@
         <result column="req_length" property="reqLength"/>
         <result column="req_width" property="reqWidth"/>
         <result column="detail_status" property="detailStatus"/>
+        <result column="weaving_mode_status" property="weavingModeStatus"/>
         <result column="delivered_qty" property="deliveredQty"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
     </resultMap>
 
     <sql id="Base_Column_List">
-        detail_id, order_no, product_model, air_permeability, req_length, req_width, detail_status, delivered_qty, created_at, updated_at
+        detail_id, order_no, product_model, air_permeability, req_length, req_width, detail_status, weaving_mode_status, delivered_qty, created_at, updated_at
     </sql>
 
 </mapper>

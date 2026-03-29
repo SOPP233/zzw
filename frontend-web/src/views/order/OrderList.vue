@@ -39,6 +39,11 @@
                 <el-table-column prop="lengthReq" label="长度" width="100" />
                 <el-table-column prop="widthReq" label="宽度" width="100" />
                 <el-table-column prop="craftReq" label="工艺要求" min-width="150" />
+                <el-table-column label="织造显示状态" min-width="120">
+                  <template #default="{ row: detail }">
+                    <el-tag size="small" type="info">{{ weavingModeText(detail.weavingModeStatus) }}</el-tag>
+                  </template>
+                </el-table-column>
                 <el-table-column label="当前工序" min-width="170">
                   <template #default="{ row: detail }">
                     <el-tag size="small" type="warning">{{ processStageText(detail) }}</el-tag>
@@ -71,7 +76,7 @@
 import { onMounted, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import request from "../../utils/request";
-import { ORDER_DETAIL_STATUS_MAP, ORDER_STATUS_MAP } from "../../constants/order";
+import { ORDER_DETAIL_STATUS_MAP, ORDER_STATUS_MAP, WEAVING_MODE_STATUS_MAP } from "../../constants/order";
 
 const loading = ref(false);
 const orders = ref([]);
@@ -97,6 +102,7 @@ const TASK_STATUS_TEXT = {
 
 const orderStatusText = (status) => ORDER_STATUS_MAP[status] || "未知";
 const detailStatusText = (status) => ORDER_DETAIL_STATUS_MAP[status] || "未知";
+const weavingModeText = (status) => WEAVING_MODE_STATUS_MAP[status ?? 0] || "未知";
 
 const processStageText = (detail) => {
   const processName = PROCESS_TYPE_TEXT[detail.currentProcessType];
@@ -104,8 +110,8 @@ const processStageText = (detail) => {
   if (processName) {
     return taskStatus ? `${processName} / ${taskStatus}` : processName;
   }
-  if (detail.detailStatus >= 3) {
-    return "已投产，工序任务同步中";
+  if (detail.detailStatus >= 2) {
+    return "织造中";
   }
   return "未投产";
 };

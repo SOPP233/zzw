@@ -160,7 +160,8 @@ public class OrderQueryController {
             detail.setAirPermeability(item.getAirPermeability() == null ? 0 : item.getAirPermeability());
             detail.setReqLength(reqLength);
             detail.setReqWidth(reqWidth);
-            detail.setDetailStatus(item.getDetailStatus() == null ? 1 : item.getDetailStatus());
+            detail.setDetailStatus(item.getDetailStatus() == null ? 0 : item.getDetailStatus());
+            detail.setWeavingModeStatus(0);
             detail.setDeliveredQty(item.getDeliveredQty() == null ? 0 : item.getDeliveredQty());
             orderDetailMapper.insert(detail);
         }
@@ -231,6 +232,7 @@ public class OrderQueryController {
         row.put("lengthReq", detail.getReqLength());
         row.put("widthReq", detail.getReqWidth());
         row.put("detailStatus", detail.getDetailStatus());
+        row.put("weavingModeStatus", detail.getWeavingModeStatus());
         row.put("deliveredQty", detail.getDeliveredQty());
         return row;
     }
@@ -243,19 +245,10 @@ public class OrderQueryController {
         if (statuses.isEmpty()) {
             return masterStatus;
         }
-        if (statuses.stream().allMatch(v -> v == 5)) {
-            return 6;
-        }
-        if (statuses.stream().anyMatch(v -> v == 4)) {
-            return 4;
-        }
-        if (statuses.stream().anyMatch(v -> v == 3 || v == 2)) {
+        if (statuses.stream().anyMatch(v -> v >= 2)) {
             return 3;
         }
-        if (statuses.stream().anyMatch(v -> v == 1)) {
-            return 1;
-        }
-        return masterStatus;
+        return 1;
     }
 
     private String resolveDetailId(String requestDetailId, String orderNo, int startIndex) {

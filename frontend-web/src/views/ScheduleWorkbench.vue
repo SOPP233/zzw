@@ -195,7 +195,7 @@ const submitMerge = async () => {
       weavingWidth: mergeForm.weavingWidth,
       machineId: mergeForm.machineId
     });
-    ElMessage.success("排产成功，已进入织造订单");
+    ElMessage.success("排产成功，已进入生产审核区");
     dialogVisible.value = false;
     mergeForm.weavingBatchNo = "";
     mergeForm.weavingLength = null;
@@ -230,3 +230,4 @@ fetchRows();
   justify-content: flex-end;
 }
 </style>
+

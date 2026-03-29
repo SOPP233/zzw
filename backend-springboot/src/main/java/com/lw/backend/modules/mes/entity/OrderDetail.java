@@ -27,6 +27,8 @@ public class OrderDetail {
 
     private Integer detailStatus;
 
+    private Integer weavingModeStatus;
+
     private Integer deliveredQty;
 
     private LocalDateTime createdAt;

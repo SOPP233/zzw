@@ -1,14 +1,12 @@
-<template>
+﻿<template>
   <div class="page">
     <el-card shadow="never">
       <template #header>
-        <div class="header-row">
-          <span>生产审核</span>
-        </div>
+        <div class="header-row"><span>生产审核</span></div>
       </template>
 
       <el-alert
-        title="仅允许将“业务审核中(1)”订单提交为“待排产(2)”"
+        title="排产成功后进入审核区；点击审核通过后才流转织造。"
         type="info"
         :closable="false"
         show-icon
@@ -39,9 +37,9 @@
             <el-tag>{{ orderStatusText(row.orderStatus) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
-            <el-button type="success" link :disabled="row.orderStatus !== 1" @click="approve(row)">提交待排产</el-button>
+            <el-button type="success" link :disabled="!hasPendingReview(row)" @click="approve(row)">审核通过并流转织造</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -103,44 +101,32 @@ const fetchOrders = async () => {
       }
     });
     const page = parsePage(res?.data ?? res);
-    orders.value = page.records;
-    total.value = page.total;
+    const filtered = page.records.filter((row) => hasPendingReview(row));
+    orders.value = filtered;
+    total.value = filtered.length;
   } catch (error) {
-    if (error?.response?.status === 404) {
-      const fallback = await request.get("/api/order-masters", {
-        params: {
-          pageNo: query.pageNo,
-          pageSize: query.pageSize,
-          orderId: query.orderId || undefined,
-          orderStatus: 1
-        }
-      });
-      const page = parsePage(fallback?.data ?? fallback);
-      orders.value = page.records;
-      total.value = page.total;
-      ElMessage.warning("后端未提供 /api/orders/full，当前展示基础订单数据");
-      return;
-    }
     orders.value = [];
     total.value = 0;
-    ElMessage.error(error?.response?.data?.message || "加载审核订单失败");
+    ElMessage.error(error?.response?.data?.message || "加载生产审核订单失败");
   } finally {
     loading.value = false;
   }
 };
 
 const approve = async (row) => {
-  await ElMessageBox.confirm(`确认将订单 ${row.orderId} 提交为“待排产”？`, "生产审核确认", {
+  await ElMessageBox.confirm(`确认将订单 ${row.orderId} 审核通过并流转到织造部门？`, "生产审核确认", {
     type: "warning"
   });
   try {
     await request.post(`/api/order-masters/${row.orderId}/production-review`);
-    ElMessage.success("审核通过，已提交待排产");
+    ElMessage.success("审核通过，订单已流转至织造中");
     fetchOrders();
   } catch (error) {
-    ElMessage.error(error?.response?.data?.message || "提交待排产失败");
+    ElMessage.error(error?.response?.data?.message || "审核提交失败");
   }
 };
+
+const hasPendingReview = (row) => (row?.details || []).some((d) => d.detailStatus === 1);
 
 const resetQuery = () => {
   query.orderId = "";

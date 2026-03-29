@@ -34,10 +34,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class MergeScheduleServiceImpl implements MergeScheduleService {
 
-    private static final int DETAIL_STATUS_WAIT_MERGE = 1;
-    private static final int DETAIL_STATUS_MERGED = 2;
-    private static final int ORDER_STATUS_WAIT_SCHEDULE = 2;
+    private static final int DETAIL_STATUS_WAIT_MERGE = 0;
+    private static final int DETAIL_STATUS_MERGED = 1;
     private static final int WEAVING_STATUS_PENDING = 1;
+    private static final int WEAVING_MODE_MERGED = 1;
+    private static final int WEAVING_MODE_SINGLE = 2;
 
     private final OrderDetailMapper orderDetailMapper;
     private final OrderMasterMapper orderMasterMapper;
@@ -137,6 +138,7 @@ public class MergeScheduleServiceImpl implements MergeScheduleService {
     }
 
     private void bindDetailsAndUpdateStatus(List<OrderDetail> details, String weavingBatchNo) {
+        int weavingModeStatus = details.size() > 1 ? WEAVING_MODE_MERGED : WEAVING_MODE_SINGLE;
         for (OrderDetail detail : details) {
             MapOrderWeaving map = new MapOrderWeaving();
             map.setDetailId(detail.getDetailId());
@@ -153,6 +155,7 @@ public class MergeScheduleServiceImpl implements MergeScheduleService {
                     new LambdaUpdateWrapper<OrderDetail>()
                             .eq(OrderDetail::getDetailId, detail.getDetailId())
                             .set(OrderDetail::getDetailStatus, DETAIL_STATUS_MERGED)
+                            .set(OrderDetail::getWeavingModeStatus, weavingModeStatus)
             );
             log.info("明细状态更新完成，影响行数: {}", rows);
             if (rows != 1) {
@@ -166,12 +169,36 @@ public class MergeScheduleServiceImpl implements MergeScheduleService {
         if (orderNos.isEmpty()) {
             return;
         }
-        orderMasterMapper.update(
-                null,
-                new LambdaUpdateWrapper<OrderMaster>()
-                        .in(OrderMaster::getOrderNo, orderNos)
-                        .set(OrderMaster::getOrderStatus, ORDER_STATUS_WAIT_SCHEDULE)
-        );
+        for (String orderNo : orderNos) {
+            Integer nextStatus = calculateOrderStatusByDetails(orderNo);
+            orderMasterMapper.update(
+                    null,
+                    new LambdaUpdateWrapper<OrderMaster>()
+                            .eq(OrderMaster::getOrderNo, orderNo)
+                            .set(OrderMaster::getOrderStatus, nextStatus)
+            );
+        }
+    }
+
+    private Integer calculateOrderStatusByDetails(String orderNo) {
+        List<OrderDetail> details = orderDetailMapper.selectList(new LambdaQueryWrapper<OrderDetail>()
+                .eq(OrderDetail::getOrderNo, orderNo));
+        if (details.isEmpty()) {
+            return 1;
+        }
+
+        boolean allFinished = details.stream().allMatch(d -> d.getDetailStatus() != null && d.getDetailStatus() == 5);
+        if (allFinished) {
+            return 6;
+        }
+
+        boolean anyInWeavingOrAfter = details.stream().anyMatch(d -> d.getDetailStatus() != null && d.getDetailStatus() >= 2);
+        if (anyInWeavingOrAfter) {
+            return 3;
+        }
+
+        // 全部还在排产/审核区
+        return 1;
     }
 
     private String generateWeavingBatchNo() {

@@ -201,7 +201,8 @@ CREATE TABLE `order_detail` (
   `air_permeability` INT(11) NOT NULL DEFAULT 0 COMMENT '透气量',
   `req_length` DECIMAL(10,2) NOT NULL COMMENT '要求长度（米）',
   `req_width` DECIMAL(10,2) NOT NULL COMMENT '要求宽度（米）',
-  `detail_status` TINYINT(3) NOT NULL DEFAULT 1 COMMENT '微观状态：1待合批，2已汇入大网，3已裁切分离，4插接中，5已入库',
+  `detail_status` TINYINT(3) NOT NULL DEFAULT 0 COMMENT '流转状态：0待排产，1待审核，2织造中',
+  `weaving_mode_status` TINYINT(3) NOT NULL DEFAULT 0 COMMENT '织造显示状态：0待合批，1合批织造，2单网织造',
   `delivered_qty` INT(11) NOT NULL DEFAULT 0 COMMENT '实际已完成入库并交货数量',
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -212,7 +213,8 @@ CREATE TABLE `order_detail` (
   CONSTRAINT `fk_order_detail_order_no`
     FOREIGN KEY (`order_no`) REFERENCES `order_master` (`order_no`)
     ON UPDATE CASCADE ON DELETE RESTRICT,
-  CONSTRAINT `ck_order_detail_status` CHECK (`detail_status` IN (1, 2, 3, 4, 5)),
+  CONSTRAINT `ck_order_detail_status` CHECK (`detail_status` IN (0, 1, 2)),
+  CONSTRAINT `ck_order_detail_weaving_mode_status` CHECK (`weaving_mode_status` IN (0, 1, 2)),
   CONSTRAINT `ck_order_detail_delivered_qty` CHECK (`delivered_qty` >= 0)
 ) ENGINE=InnoDB
   DEFAULT CHARSET=utf8mb4
