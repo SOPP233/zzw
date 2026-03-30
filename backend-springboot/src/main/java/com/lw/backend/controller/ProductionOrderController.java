@@ -8,6 +8,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -77,7 +78,57 @@ public class ProductionOrderController {
             qa.toArray()
         );
         return okPage(records,total==null?0:total,p,s);
-    }    
+    }
+    @GetMapping("/cutting-tasks")
+    public Map<String,Object> cuttingTasks(@RequestParam(defaultValue="1") long pageNo,@RequestParam(defaultValue="10") long pageSize,@RequestParam(required=false) String batchNo,@RequestParam(required=false) Integer taskStatus){
+        long p=Math.max(pageNo,1),s=Math.max(pageSize,1),o=(p-1)*s;
+        StringBuilder w=new StringBuilder(" WHERE 1=1 ");
+        List<Object>a=new ArrayList<>();
+        if(StringUtils.hasText(batchNo)){w.append(" AND (t.task_id LIKE ? OR t.setting_batch_no LIKE ?) ");a.add("%"+batchNo.trim()+"%");a.add("%"+batchNo.trim()+"%");}
+        if(taskStatus!=null){w.append(" AND t.task_status=? ");a.add(taskStatus);}
+        Long total=jdbcTemplate.queryForObject("SELECT COUNT(1) FROM prd_cutting_task t "+w,a.toArray(),Long.class);
+        List<Object>qa=new ArrayList<>(a);qa.add((int)s);qa.add((int)o);
+        List<Map<String,Object>>records=jdbcTemplate.queryForList(
+            "SELECT t.task_id,t.setting_batch_no,t.source_length,t.source_width,t.task_status,t.receive_time,t.created_at,t.updated_at," +
+                "(SELECT COUNT(1) FROM prd_cutting_record r WHERE r.task_id=t.task_id) AS small_net_count," +
+                "(SELECT COUNT(1) FROM prd_cutting_record r WHERE r.task_id=t.task_id AND r.process_status=2) AS completed_small_count " +
+            "FROM prd_cutting_task t "+w+" ORDER BY t.created_at DESC LIMIT ? OFFSET ?",
+            qa.toArray()
+        );
+        return okPage(records,total==null?0:total,p,s);
+    }
+    @GetMapping("/cutting-tasks/{taskId}/related-orders")
+    public Map<String,Object> cuttingTaskRelatedOrders(@PathVariable String taskId){
+        proc("prd_cutting_task","task_id",taskId,"裁网任务不存在");
+        List<Map<String,Object>> rs = jdbcTemplate.queryForList(
+            "SELECT r.cut_batch_no,r.task_id,r.detail_id,d.order_no,om.contract_no,c.customer_name,d.product_model,d.air_permeability,d.req_length,d.req_width,r.actual_cut_len,r.actual_cut_wid,r.process_status,r.cut_time " +
+            "FROM prd_cutting_record r " +
+            "JOIN order_detail d ON d.detail_id=r.detail_id " +
+            "JOIN order_master om ON om.order_no=d.order_no " +
+            "LEFT JOIN contract_master cm ON cm.contract_id=om.contract_no " +
+            "LEFT JOIN customer c ON c.customer_id=cm.customer_id " +
+            "WHERE r.task_id=? ORDER BY r.created_at ASC,r.cut_batch_no ASC",
+            taskId
+        );
+        return ok(rs);
+    }
+    @PostMapping("/cutting-tasks/{taskId}/complete")
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String,Object> completeCuttingTask(@PathVariable String taskId,@RequestBody CuttingTaskReq r){
+        ensureTable("prd_cutting_task"); ensureTable("prd_cutting_record");
+        req(r.operatorId,"operatorId");
+        proc("prd_cutting_task","task_id",taskId,"裁网任务不存在");
+        Long total=jdbcTemplate.queryForObject("SELECT COUNT(1) FROM prd_cutting_record WHERE task_id=?",Long.class,taskId);
+        if(total==null||total<=0) throw new BizException("裁网任务未生成对应小网");
+        List<String>batches=jdbcTemplate.queryForList("SELECT cut_batch_no FROM prd_cutting_record WHERE task_id=? ORDER BY cut_batch_no",String.class,taskId);
+        BigDecimal totalWaste=r.wasteArea==null?BigDecimal.ZERO:r.wasteArea;
+        BigDecimal avgWaste=totalWaste.divide(BigDecimal.valueOf(Math.max(batches.size(),1)),2, RoundingMode.HALF_UP);
+        Timestamp now=ts(LocalDateTime.now());
+        int affected=jdbcTemplate.update("UPDATE prd_cutting_record SET operator_id=?,waste_area=?,process_status=?,cut_time=? WHERE task_id=?",r.operatorId,avgWaste,CUTTING_DONE,now,taskId);
+        jdbcTemplate.update("UPDATE prd_cutting_task SET task_status=? WHERE task_id=?",3,taskId);
+        for(String cb:batches){activateSplicing(cb,r.operatorId);}
+        return ok(Map.of("taskId",taskId,"smallNetCount",batches.size(),"affected",affected,"taskStatus",3));
+    }
     @GetMapping("/splicing-orders") public Map<String,Object> splicingOrders(@RequestParam(defaultValue="1") long pageNo,@RequestParam(defaultValue="10") long pageSize,@RequestParam(required=false) String batchNo,@RequestParam(required=false) Integer processStatus){return page("prd_splicing_process","splice_batch_no",pageNo,pageSize,batchNo,processStatus);}    
     @GetMapping("/sec-setting-orders") public Map<String,Object> secSettingOrders(@RequestParam(defaultValue="1") long pageNo,@RequestParam(defaultValue="10") long pageSize,@RequestParam(required=false) String batchNo,@RequestParam(required=false) Integer processStatus){return page("prd_sec_setting_process","final_batch_no",pageNo,pageSize,batchNo,processStatus);}    
 
@@ -253,6 +304,7 @@ public class ProductionOrderController {
     public static class WeavingReq{public String machineId,operatorId,materialBatchNo,tensionParams,actualStartTime; public BigDecimal actualLength;}
     public static class SettingReq{public String operatorId; public BigDecimal actualTemp,shrinkRate; public Integer settingDuration;}
     public static class CuttingReq{public String operatorId; public BigDecimal actualCutLen,actualCutWid,wasteArea;}
+    public static class CuttingTaskReq{public String operatorId; public BigDecimal wasteArea;}
     public static class SplicingReq{public String operatorId,spliceType,jointStrength;}
     public static class SecReq{public String operatorId,meshDefectInfo; public BigDecimal finalLength,finalWidth; public Integer qcTriggerFlag;}
 }
