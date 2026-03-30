@@ -190,6 +190,11 @@ const reportForm = reactive({
 
 const parseData = (payload) => payload?.data ?? payload ?? {};
 const parsePage = (payload) => (payload?.records && Array.isArray(payload.records) ? { records: payload.records, total: Number(payload.total || 0) } : { records: [], total: 0 });
+const getCurrentUserId = async () => {
+  const res = await request.get("/api/auth/me");
+  const data = parseData(res);
+  return data?.userId || "";
+};
 
 const fetchRows = async () => {
   loading.value = true;
@@ -235,6 +240,9 @@ const openReport = async (row) => {
     reportForm.tensionParams = report.tension_params || "";
     reportForm.actualLength = report.actual_length ?? reportForm.actualLength;
     reportForm.actualStartTime = report.actual_start_time || "";
+    if (!reportForm.operatorId) {
+      reportForm.operatorId = await getCurrentUserId();
+    }
   } catch (error) {
     ElMessage.error(error?.response?.data?.message || "加载报工信息失败");
     return;
@@ -269,7 +277,16 @@ const openRelatedOrders = async (row) => {
 
 const submitReport = async () => {
   if (!reportForm.machineId) return ElMessage.warning("请填写机台号");
-  if (!reportForm.operatorId) return ElMessage.warning("请填写操作工号");
+  let operatorId = String(reportForm.operatorId || "").trim();
+  if (!operatorId) {
+    try {
+      operatorId = await getCurrentUserId();
+      reportForm.operatorId = operatorId;
+    } catch (_) {
+      operatorId = "";
+    }
+  }
+  if (!operatorId) return ElMessage.warning("请填写操作工号");
   if (!reportForm.materialBatchNo) return ElMessage.warning("请填写原料批次号");
   if (!reportForm.tensionParams) return ElMessage.warning("请填写张力参数");
   if (reportForm.actualLength === null || reportForm.actualLength === undefined) return ElMessage.warning("请填写实际产出长度");
@@ -279,7 +296,7 @@ const submitReport = async () => {
   try {
     await request.post(`/api/production/weaving-orders/${reportForm.weavingBatchNo}/report`, {
       machineId: reportForm.machineId,
-      operatorId: reportForm.operatorId,
+      operatorId,
       materialBatchNo: reportForm.materialBatchNo,
       tensionParams: reportForm.tensionParams,
       actualLength: reportForm.actualLength,
