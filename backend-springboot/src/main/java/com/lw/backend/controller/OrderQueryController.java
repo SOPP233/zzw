@@ -13,6 +13,7 @@ import com.lw.backend.modules.mes.mapper.CustomerMapper;
 import com.lw.backend.modules.mes.mapper.OrderDetailMapper;
 import com.lw.backend.modules.mes.mapper.OrderMasterMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,6 +28,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,6 +43,7 @@ public class OrderQueryController {
     private final OrderDetailMapper orderDetailMapper;
     private final CustomerMapper customerMapper;
     private final ContractMasterMapper contractMasterMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     @GetMapping
     public Map<String, Object> list(@RequestParam(required = false) String customerName) {
@@ -197,6 +200,7 @@ public class OrderQueryController {
         ContractMaster contract = context.contractMap().get(master.getContractNo());
         String customerId = contract == null ? null : contract.getCustomerId();
         String customerName = customerId == null ? null : context.customerNameMap().get(customerId);
+        Map<String, ProcessProgress> progressMap = resolveProcessProgress(details);
 
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("orderNo", master.getOrderNo());
@@ -210,11 +214,11 @@ public class OrderQueryController {
         row.put("totalAmount", contract == null ? null : contract.getContractAmount());
         row.put("expectedDate", master.getExpectedDate());
         row.put("orderStatus", resolveOrderStatus(master.getOrderStatus(), details));
-        row.put("details", details.stream().map(this::toDetailRow).toList());
+        row.put("details", details.stream().map(detail -> toDetailRow(detail, progressMap.get(detail.getDetailId()))).toList());
         return row;
     }
 
-    private Map<String, Object> toDetailRow(OrderDetail detail) {
+    private Map<String, Object> toDetailRow(OrderDetail detail, ProcessProgress progress) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("detailId", detail.getDetailId());
         row.put("orderNo", detail.getOrderNo());
@@ -228,7 +232,167 @@ public class OrderQueryController {
         row.put("detailStatus", detail.getDetailStatus());
         row.put("weavingModeStatus", detail.getWeavingModeStatus());
         row.put("deliveredQty", detail.getDeliveredQty());
+        row.put("currentProcessType", progress == null ? null : progress.processType());
+        row.put("currentTaskStatus", progress == null ? null : progress.taskStatus());
         return row;
+    }
+
+    private Map<String, ProcessProgress> resolveProcessProgress(List<OrderDetail> details) {
+        if (details == null || details.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        Set<String> detailIds = details.stream().map(OrderDetail::getDetailId).collect(Collectors.toSet());
+        String detailPh = placeholders(detailIds.size());
+        List<Map<String, Object>> mappingRows = jdbcTemplate.queryForList(
+                "SELECT detail_id, weaving_batch_no FROM map_order_weaving WHERE detail_id IN (" + detailPh + ")",
+                detailIds.toArray()
+        );
+        if (mappingRows.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<String, String> detailToWeaving = new LinkedHashMap<>();
+        Set<String> weavingBatches = new LinkedHashSet<>();
+        for (Map<String, Object> row : mappingRows) {
+            String detailId = String.valueOf(row.get("detail_id"));
+            String weavingBatch = String.valueOf(row.get("weaving_batch_no"));
+            detailToWeaving.put(detailId, weavingBatch);
+            weavingBatches.add(weavingBatch);
+        }
+
+        Map<String, Integer> weavingStatus = queryStatusMap("prd_weaving_process", "weaving_batch_no", weavingBatches);
+        Map<String, Map<String, Object>> settingByWeaving = queryLinkAndStatus("prd_setting_process", "weaving_batch_no", "setting_batch_no", weavingBatches);
+        Set<String> settingBatches = settingByWeaving.values().stream()
+                .map(v -> asString(v.get("next")))
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        Map<String, Map<String, Object>> cuttingByDetail = queryDetailCutting(detailIds);
+        Set<String> cutBatches = cuttingByDetail.values().stream()
+                .map(v -> asString(v.get("next")))
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        Map<String, Map<String, Object>> splicingByCut = queryLinkAndStatus("prd_splicing_process", "cut_batch_no", "splice_batch_no", cutBatches);
+        Set<String> spliceBatches = splicingByCut.values().stream()
+                .map(v -> asString(v.get("next")))
+                .filter(StringUtils::hasText)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<String, Integer> secStatusBySplice = queryStatusMap("prd_sec_setting_process", "splice_batch_no", spliceBatches);
+
+        Map<String, ProcessProgress> result = new LinkedHashMap<>();
+        for (OrderDetail detail : details) {
+            String detailId = detail.getDetailId();
+            String weavingBatch = detailToWeaving.get(detailId);
+            if (!StringUtils.hasText(weavingBatch)) {
+                continue;
+            }
+            Integer processType = 1;
+            Integer taskStatus = weavingStatus.get(weavingBatch);
+
+            Map<String, Object> setting = settingByWeaving.get(weavingBatch);
+            if (setting != null) {
+                processType = 2;
+                taskStatus = asInteger(setting.get("status"));
+            }
+
+            Map<String, Object> cutting = cuttingByDetail.get(detailId);
+            if (cutting != null) {
+                processType = 3;
+                taskStatus = asInteger(cutting.get("status"));
+            }
+
+            String cutBatch = cutting == null ? null : asString(cutting.get("next"));
+            Map<String, Object> splicing = StringUtils.hasText(cutBatch) ? splicingByCut.get(cutBatch) : null;
+            if (splicing != null) {
+                processType = 4;
+                taskStatus = asInteger(splicing.get("status"));
+            }
+
+            String spliceBatch = splicing == null ? null : asString(splicing.get("next"));
+            Integer secStatus = StringUtils.hasText(spliceBatch) ? secStatusBySplice.get(spliceBatch) : null;
+            if (secStatus != null) {
+                processType = 5;
+                taskStatus = secStatus;
+            }
+            result.put(detailId, new ProcessProgress(processType, taskStatus));
+        }
+        return result;
+    }
+
+    private Map<String, Integer> queryStatusMap(String table, String keyColumn, Set<String> keys) {
+        if (keys == null || keys.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        String ph = placeholders(keys.size());
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT " + keyColumn + " AS k, process_status AS s FROM " + table + " WHERE " + keyColumn + " IN (" + ph + ")",
+                keys.toArray()
+        );
+        Map<String, Integer> map = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            map.put(asString(row.get("k")), asInteger(row.get("s")));
+        }
+        return map;
+    }
+
+    private Map<String, Map<String, Object>> queryLinkAndStatus(String table, String keyColumn, String nextColumn, Set<String> keys) {
+        if (keys == null || keys.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        String ph = placeholders(keys.size());
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT " + keyColumn + " AS k, " + nextColumn + " AS n, process_status AS s FROM " + table + " WHERE " + keyColumn + " IN (" + ph + ")",
+                keys.toArray()
+        );
+        Map<String, Map<String, Object>> map = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            Map<String, Object> v = new LinkedHashMap<>();
+            v.put("next", asString(row.get("n")));
+            v.put("status", asInteger(row.get("s")));
+            map.put(asString(row.get("k")), v);
+        }
+        return map;
+    }
+
+    private Map<String, Map<String, Object>> queryDetailCutting(Set<String> detailIds) {
+        if (detailIds == null || detailIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        String ph = placeholders(detailIds.size());
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT detail_id AS k, cut_batch_no AS n, process_status AS s FROM prd_cutting_record WHERE detail_id IN (" + ph + ")",
+                detailIds.toArray()
+        );
+        Map<String, Map<String, Object>> map = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            Map<String, Object> v = new LinkedHashMap<>();
+            v.put("next", asString(row.get("n")));
+            v.put("status", asInteger(row.get("s")));
+            map.put(asString(row.get("k")), v);
+        }
+        return map;
+    }
+
+    private String placeholders(int size) {
+        if (size <= 0) {
+            return "";
+        }
+        return String.join(",", Collections.nCopies(size, "?"));
+    }
+
+    private String asString(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private Integer asInteger(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        return Integer.parseInt(String.valueOf(value));
     }
 
     private Integer resolveOrderStatus(Integer masterStatus, List<OrderDetail> details) {
@@ -295,6 +459,9 @@ public class OrderQueryController {
     private record CustomerContractContext(Map<String, String> customerNameMap,
                                            Map<String, ContractMaster> contractMap,
                                            Set<String> contractIds) {
+    }
+
+    private record ProcessProgress(Integer processType, Integer taskStatus) {
     }
 
     public static class OrderFullCreateRequest {

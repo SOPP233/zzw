@@ -17,7 +17,7 @@ export const ORDER_STATUS_OPTIONS = [0, 1, 2, 3, 4, 5, 6].map((value) => ({
 export const ORDER_DETAIL_STATUS_MAP = {
   0: "待排产",
   1: "待审核",
-  2: "织造中"
+  2: "生产中"
 };
 
 // 严格对齐数据库 weaving_mode_status：0待合批，1合批织造，2单网织造

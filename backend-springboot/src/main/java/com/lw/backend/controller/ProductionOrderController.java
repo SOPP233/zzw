@@ -145,15 +145,16 @@ public class ProductionOrderController {
     @Transactional(rollbackFor = Exception.class)
     public Map<String,Object> submitWeavingReport(@PathVariable String batchNo,@RequestBody WeavingReq r){
         ensureTable("prd_weaving_report"); req(r.machineId,"machineId"); req(r.operatorId,"operatorId"); req(r.materialBatchNo,"materialBatchNo"); req(r.tensionParams,"tensionParams"); req(r.actualLength,"actualLength");
+        String operatorId=normalizeOperatorId(r.operatorId);
         LocalDateTime st=dt(r.actualStartTime,"actualStartTime"); if(st==null) throw new BizException("actualStartTime不能为空");
         LocalDateTime ed=LocalDateTime.now(); if(ed.isBefore(st)) throw new BizException("actualEndTime不能早于actualStartTime");
         proc("prd_weaving_process","weaving_batch_no",batchNo,"织造批次不存在");
         upsert("prd_weaving_report","weaving_batch_no",batchNo,
             "UPDATE prd_weaving_report SET machine_id=?,operator_id=?,material_batch_no=?,tension_params=?,actual_length=?,actual_start_time=?,actual_end_time=? WHERE weaving_batch_no=?",
-            new Object[]{r.machineId,r.operatorId,r.materialBatchNo,r.tensionParams,r.actualLength,ts(st),ts(ed),batchNo},
+            new Object[]{r.machineId,operatorId,r.materialBatchNo,r.tensionParams,r.actualLength,ts(st),ts(ed),batchNo},
             "INSERT INTO prd_weaving_report (weaving_batch_no,machine_id,operator_id,material_batch_no,tension_params,actual_length,actual_start_time,actual_end_time) VALUES (?,?,?,?,?,?,?,?)",
-            new Object[]{batchNo,r.machineId,r.operatorId,r.materialBatchNo,r.tensionParams,r.actualLength,ts(st),ts(ed)});
-        jdbcTemplate.update("UPDATE prd_weaving_process SET machine_id=?,operator_id=?,actual_length=?,process_status=?,completed_at=? WHERE weaving_batch_no=?",r.machineId,r.operatorId,r.actualLength,WEAVING_DONE,ts(ed),batchNo);
+            new Object[]{batchNo,r.machineId,operatorId,r.materialBatchNo,r.tensionParams,r.actualLength,ts(st),ts(ed)});
+        jdbcTemplate.update("UPDATE prd_weaving_process SET machine_id=?,operator_id=?,actual_length=?,process_status=?,completed_at=? WHERE weaving_batch_no=?",r.machineId,operatorId,r.actualLength,WEAVING_DONE,ts(ed),batchNo);
         syncOrderStatusForWeavingBatch(batchNo); activateSetting(batchNo);
         return ok(Map.of("weavingBatchNo",batchNo,"processStatus",WEAVING_DONE,"settingActivated",true));
     }
@@ -266,6 +267,7 @@ public class ProductionOrderController {
     private LocalDateTime dt(String v,String f){if(!StringUtils.hasText(v))return null;try{return LocalDateTime.parse(v.trim());}catch(DateTimeParseException e){try{return LocalDateTime.parse(v.trim(),SPACE);}catch(DateTimeParseException ex){throw new BizException(f+"时间格式错误，支持: yyyy-MM-ddTHH:mm:ss 或 yyyy-MM-dd HH:mm:ss");}}}
     private String s(Object v){return v==null?null:String.valueOf(v);}    
     private BigDecimal dec(Object v){if(v==null)return BigDecimal.ZERO; if(v instanceof BigDecimal bd)return bd; return new BigDecimal(String.valueOf(v));}
+    private String normalizeOperatorId(String input){String value=input==null?null:input.trim();if(!StringUtils.hasText(value))return value;Long idHit=jdbcTemplate.queryForObject("SELECT COUNT(1) FROM sys_user WHERE user_id=? AND is_active=1",Long.class,value);if(idHit!=null&&idHit>0)return value;List<Map<String,Object>>rows=jdbcTemplate.queryForList("SELECT user_id FROM sys_user WHERE username=? AND is_active=1 LIMIT 1",value);if(!rows.isEmpty())return String.valueOf(rows.get(0).get("user_id"));return value;}
     private void ensureTable(String t){Integer c=jdbcTemplate.queryForObject("SELECT COUNT(1) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?",Integer.class,t);if(c==null||c==0)throw new BizException("本地数据库缺少表 "+t+"，请先执行LW.sql同步数据库结构");}
     private Map<String,Object> proc(String table,String idCol,String idVal,String msg){List<Map<String,Object>>rs=jdbcTemplate.queryForList("SELECT * FROM "+table+" WHERE "+idCol+" = ?",idVal);if(rs.isEmpty())throw new BizException(msg+": "+idVal);return rs.get(0);}    
     private void upsert(String table,String idCol,String idVal,String updSql,Object[]updArgs,String insSql,Object[]insArgs){Long c=jdbcTemplate.queryForObject("SELECT COUNT(1) FROM "+table+" WHERE "+idCol+" = ?",Long.class,idVal);if(c!=null&&c>0)jdbcTemplate.update(updSql,updArgs);else jdbcTemplate.update(insSql,insArgs);}    

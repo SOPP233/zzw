@@ -95,9 +95,9 @@ const PROCESS_TYPE_TEXT = {
 };
 
 const TASK_STATUS_TEXT = {
+  1: "待生产",
+  2: "已完工",
   0: "待接收",
-  1: "执行中",
-  2: "完工审批",
   3: "已完成"
 };
 
@@ -112,7 +112,7 @@ const processStageText = (detail) => {
     return taskStatus ? `${processName} / ${taskStatus}` : processName;
   }
   if (detail.detailStatus >= 2) {
-    return "织造中";
+    return "生产流转中";
   }
   return "未投产";
 };
