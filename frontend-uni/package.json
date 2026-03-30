@@ -1,0 +1,24 @@
+{
+  "name": "lw-uni-report",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:h5": "uni",
+    "dev:mp-weixin": "uni -p mp-weixin",
+    "build:h5": "uni build",
+    "build:mp-weixin": "uni build -p mp-weixin"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0-5000520260324002",
+    "@dcloudio/uni-h5": "3.0.0-5000520260324002",
+    "@dcloudio/uni-mp-weixin": "3.0.0-5000520260324002",
+    "pinia": "^2.1.7",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "3.4.28",
+    "@dcloudio/vite-plugin-uni": "3.0.0-5000520260324002",
+    "vite": "5.2.8"
+  }
+}
