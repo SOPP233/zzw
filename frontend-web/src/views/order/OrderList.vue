@@ -60,6 +60,7 @@
         </el-table-column>
 
         <el-table-column prop="orderId" label="订单号" min-width="180" />
+        <el-table-column prop="contractNo" label="合同号" min-width="180" />
         <el-table-column prop="customerName" label="客户" min-width="150" />
         <el-table-column prop="expectedDate" label="交付时间" min-width="140" />
         <el-table-column label="总状态" min-width="120">

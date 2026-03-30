@@ -37,6 +37,11 @@
           <el-menu-item v-if="visible('/basic/equipments')" index="/basic/equipments">设备与产能模型</el-menu-item>
         </el-sub-menu>
 
+        <el-sub-menu v-if="visible('/system/users')" index="/system">
+          <template #title>系统管理</template>
+          <el-menu-item v-if="visible('/system/users')" index="/system/users">用户管理</el-menu-item>
+        </el-sub-menu>
+
         <el-sub-menu
           v-if="
             visible('/inventory/raw-materials') ||
@@ -79,8 +84,8 @@ const authStore = useAuthStore();
 
 const visible = (path) => authStore.hasRouteAccess(path, authStore.roleCode.value);
 
-const handleLogout = () => {
-  authStore.logout();
+const handleLogout = async () => {
+  await authStore.logout();
   router.replace("/login");
 };
 </script>

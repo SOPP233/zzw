@@ -1,6 +1,7 @@
 package com.lw.backend.modules.mes.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -20,7 +21,16 @@ public class SysUser {
 
     private String realName;
 
+    private String phone;
+
+    private String deptId;
+
+    @TableField("is_active")
     private Integer status;
+
+    private String openId;
+
+    private String unionId;
 
     private LocalDateTime lastLoginTime;
 
@@ -28,4 +38,3 @@ public class SysUser {
 
     private LocalDateTime updatedAt;
 }
-

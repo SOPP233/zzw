@@ -1,6 +1,7 @@
 package com.lw.backend.modules.mes.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -18,14 +19,17 @@ public class OrderMaster {
 
     private String contractNo;
 
+    @TableField(exist = false)
     private String customerId;
 
+    @TableField(exist = false)
     private BigDecimal totalAmount;
 
     private LocalDate expectedDate;
 
     private Integer orderStatus;
 
+    @TableField(exist = false)
     private String remark;
 
     private LocalDateTime createdAt;

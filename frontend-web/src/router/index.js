@@ -13,6 +13,7 @@ const SplicingOrders = () => import("../views/production/SplicingOrders.vue");
 const SecSettingOrders = () => import("../views/production/SecSettingOrders.vue");
 const BasicProducts = () => import("../views/basic/BasicProducts.vue");
 const BasicEquipments = () => import("../views/basic/BasicEquipments.vue");
+const SystemUserManage = () => import("../views/system/SystemUserManage.vue");
 const RawMaterialInventory = () => import("../views/inventory/RawMaterialInventory.vue");
 const WipInventory = () => import("../views/inventory/WipInventory.vue");
 const FinishedGoodsInventory = () => import("../views/inventory/FinishedGoodsInventory.vue");
@@ -37,6 +38,7 @@ const routes = [
       { path: "production/sec-setting-orders", name: "SecSettingOrders", component: SecSettingOrders },
       { path: "basic/products", name: "BasicProducts", component: BasicProducts },
       { path: "basic/equipments", name: "BasicEquipments", component: BasicEquipments },
+      { path: "system/users", name: "SystemUserManage", component: SystemUserManage },
       { path: "inventory/ledger", name: "InventoryLedger", redirect: "/inventory/raw-materials" },
       { path: "inventory/raw-materials", name: "RawMaterialInventory", component: RawMaterialInventory },
       { path: "inventory/wip", name: "WipInventory", component: WipInventory },

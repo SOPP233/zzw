@@ -24,8 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -121,19 +119,14 @@ public class OrderQueryController {
 
         String orderNo;
         if (existingMaster == null) {
-            orderNo = firstNonBlank(request.getOrderNo(), request.getOrderId());
-            if (!StringUtils.hasText(orderNo)) {
-                orderNo = "ORD" + DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(LocalDateTime.now());
-            }
+            // 订单主表号由合同号派生，规则：合同号 + D
+            orderNo = contractNo + "D";
 
             OrderMaster master = new OrderMaster();
             master.setOrderNo(orderNo);
             master.setContractNo(contractNo);
-            master.setCustomerId(contract.getCustomerId());
-            master.setTotalAmount(contract.getContractAmount());
             master.setExpectedDate(request.getExpectedDate());
             master.setOrderStatus(request.getOrderStatus() == null ? 1 : request.getOrderStatus());
-            master.setRemark(contract.getDeliveryAddress());
             orderMasterMapper.insert(master);
         } else {
             orderNo = existingMaster.getOrderNo();
@@ -169,6 +162,7 @@ public class OrderQueryController {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("orderNo", orderNo);
         data.put("orderId", orderNo);
+        data.put("contractNo", contractNo);
         return success(data);
     }
 
@@ -257,7 +251,7 @@ public class OrderQueryController {
         }
         int index = Math.max(startIndex, 1);
         while (true) {
-            String candidate = orderNo.replace("ORD", "DET") + String.format("%03d", index);
+            String candidate = orderNo + "-" + String.format("%03d", index);
             if (orderDetailMapper.selectById(candidate) == null) {
                 return candidate;
             }

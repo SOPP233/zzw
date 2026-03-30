@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page">
     <el-card shadow="never">
       <template #header>
@@ -128,11 +128,10 @@
             <template #header><div class="section-title">订单录入表单</div></template>
             <el-form label-width="92px">
               <el-row :gutter="12">
-                <el-col :span="8"><el-form-item label="订单号"><el-input v-model.trim="orderForm.orderNo" placeholder="留空自动生成" /></el-form-item></el-col>
                 <el-col :span="8">
                   <el-form-item label="合同号">
-                    <el-select v-model="orderForm.contractId" filterable placeholder="请选择合同号" style="width: 100%">
-                      <el-option v-for="item in contracts" :key="item.contractId" :label="`${item.contractId} / ${item.customerId}`" :value="item.contractId" />
+                    <el-select v-model="orderForm.contractId" filterable clearable allow-create default-first-option placeholder="请选择或输入合同号" style="width: 100%">
+                      <el-option v-for="item in contractOptions" :key="item.contractId" :label="`${item.contractId} / ${item.customerId}`" :value="item.contractId" />
                     </el-select>
                   </el-form-item>
                 </el-col>
@@ -222,6 +221,7 @@ const contractSubmitLoading = ref(false);
 const orders = ref([]);
 const customers = ref([]);
 const contracts = ref([]);
+const contractOptions = ref([]);
 
 const orderTotal = ref(0);
 const customerTotal = ref(0);
@@ -234,7 +234,6 @@ const contractQuery = reactive({ contractId: "", customerId: "", pageNo: 1, page
 const createDefaultDetail = () => ({ productModel: "", airPermeability: null, reqLength: null, reqWidth: null });
 
 const orderForm = reactive({
-  orderNo: "",
   contractId: "",
   expectedDate: "",
   orderStatus: 1,
@@ -308,8 +307,17 @@ const fetchContracts = async () => {
   }
 };
 
+const fetchContractOptions = async () => {
+  try {
+    const res = await request.get("/api/contracts", { params: { pageNo: 1, pageSize: 1000 } });
+    const page = parsePage(res?.data ?? res);
+    contractOptions.value = page.records;
+  } catch (error) {
+    contractOptions.value = [];
+  }
+};
+
 const resetOrderForm = () => {
-  orderForm.orderNo = "";
   orderForm.contractId = "";
   orderForm.expectedDate = "";
   orderForm.orderStatus = 1;
@@ -376,8 +384,9 @@ const removeDetailRow = (index) => {
 };
 
 const submitOrder = async () => {
-  if (!orderForm.contractId) {
-    ElMessage.warning("请选择合同号");
+  const contractId = String(orderForm.contractId || "").trim();
+  if (!contractId) {
+    ElMessage.warning("请选择或输入合同号");
     return;
   }
 
@@ -395,8 +404,7 @@ const submitOrder = async () => {
   orderSubmitLoading.value = true;
   try {
     await request.post("/api/orders/full", {
-      orderNo: orderForm.orderNo || undefined,
-      contractId: orderForm.contractId,
+      contractId,
       expectedDate: orderForm.expectedDate || undefined,
       orderStatus: orderForm.orderStatus,
       details: validDetails
@@ -440,6 +448,7 @@ const submitContract = async () => {
     ElMessage.success("合同提交成功");
     resetContractForm();
     fetchContracts();
+    fetchContractOptions();
   } catch (error) {
     ElMessage.error(error?.response?.data?.message || "合同提交失败");
   } finally {
@@ -450,6 +459,7 @@ const submitContract = async () => {
 fetchOrders();
 fetchCustomers();
 fetchContracts();
+fetchContractOptions();
 </script>
 
 <style scoped>
