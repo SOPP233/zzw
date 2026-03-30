@@ -38,7 +38,7 @@ public class ProductionOrderController {
     @PostMapping("/weaving-review-orders/{batchNo}/approve")
     @Transactional(rollbackFor = Exception.class)
     public Map<String,Object> approveWeavingReview(@PathVariable String batchNo){
-        proc("prd_weaving_process","weaving_batch_no",batchNo,"缁囬€犳壒娆′笉瀛樺湪");
+        proc("prd_weaving_process","weaving_batch_no",batchNo,"织造批次不存在");
         int detailAffected=jdbcTemplate.update("UPDATE order_detail d JOIN map_order_weaving m ON m.detail_id=d.detail_id SET d.detail_status=2 WHERE m.weaving_batch_no=? AND d.detail_status=1",batchNo);
         if(detailAffected<=0) throw new BizException("该织造批次无待审核明细");
         List<String>os=jdbcTemplate.queryForList("SELECT DISTINCT d.order_no FROM order_detail d JOIN map_order_weaving m ON m.detail_id=d.detail_id WHERE m.weaving_batch_no=?",String.class,batchNo);
@@ -47,7 +47,7 @@ public class ProductionOrderController {
     }
     @GetMapping("/weaving-orders/{batchNo}/related-orders")
     public Map<String,Object> weavingRelatedOrders(@PathVariable String batchNo){
-        proc("prd_weaving_process","weaving_batch_no",batchNo,"缁囬€犳壒娆′笉瀛樺湪");
+        proc("prd_weaving_process","weaving_batch_no",batchNo,"织造批次不存在");
         List<Map<String,Object>> rs = jdbcTemplate.queryForList(
             "SELECT m.detail_id,d.order_no,om.contract_no,c.customer_id,c.customer_name,d.product_model,d.air_permeability,d.req_length,d.req_width,d.detail_status,d.weaving_mode_status,m.created_at AS mapped_at " +
             "FROM map_order_weaving m " +
@@ -86,7 +86,7 @@ public class ProductionOrderController {
         ensureTable("prd_weaving_report");
         List<Map<String,Object>> rs=jdbcTemplate.queryForList("SELECT weaving_batch_no,machine_id,operator_id,material_batch_no,tension_params,actual_length,actual_start_time,actual_end_time,created_at,updated_at FROM prd_weaving_report WHERE weaving_batch_no=?",batchNo);
         if(!rs.isEmpty()) return ok(rs.get(0));
-        Map<String,Object> p=proc("prd_weaving_process","weaving_batch_no",batchNo,"缁囬€犳壒娆′笉瀛樺湪");
+        Map<String,Object> p=proc("prd_weaving_process","weaving_batch_no",batchNo,"织造批次不存在");
         return ok(kv("weaving_batch_no",batchNo,"machine_id",p.get("machine_id"),"operator_id",p.get("operator_id"),"actual_length",p.get("actual_length"),"actual_start_time",null,"actual_end_time",null,"material_batch_no",null,"tension_params",null));
     }
 
@@ -94,9 +94,9 @@ public class ProductionOrderController {
     @Transactional(rollbackFor = Exception.class)
     public Map<String,Object> submitWeavingReport(@PathVariable String batchNo,@RequestBody WeavingReq r){
         ensureTable("prd_weaving_report"); req(r.machineId,"machineId"); req(r.operatorId,"operatorId"); req(r.materialBatchNo,"materialBatchNo"); req(r.tensionParams,"tensionParams"); req(r.actualLength,"actualLength");
-        LocalDateTime st=dt(r.actualStartTime,"actualStartTime"); if(st==null) throw new BizException("actualStartTime涓嶈兘涓虹┖");
-        LocalDateTime ed=LocalDateTime.now(); if(ed.isBefore(st)) throw new BizException("actualEndTime涓嶈兘鏃╀簬actualStartTime");
-        proc("prd_weaving_process","weaving_batch_no",batchNo,"缁囬€犳壒娆′笉瀛樺湪");
+        LocalDateTime st=dt(r.actualStartTime,"actualStartTime"); if(st==null) throw new BizException("actualStartTime不能为空");
+        LocalDateTime ed=LocalDateTime.now(); if(ed.isBefore(st)) throw new BizException("actualEndTime不能早于actualStartTime");
+        proc("prd_weaving_process","weaving_batch_no",batchNo,"织造批次不存在");
         upsert("prd_weaving_report","weaving_batch_no",batchNo,
             "UPDATE prd_weaving_report SET machine_id=?,operator_id=?,material_batch_no=?,tension_params=?,actual_length=?,actual_start_time=?,actual_end_time=? WHERE weaving_batch_no=?",
             new Object[]{r.machineId,r.operatorId,r.materialBatchNo,r.tensionParams,r.actualLength,ts(st),ts(ed),batchNo},
@@ -210,9 +210,9 @@ public class ProductionOrderController {
     private Map<String,Object> okPage(List<Map<String,Object>> records,long total,long current,long size){Map<String,Object>page=new LinkedHashMap<>();page.put("records",records);page.put("total",total);page.put("current",current);page.put("size",size);Map<String,Object>r=new LinkedHashMap<>();r.put("success",true);r.put("data",page);return r;}
     private Map<String,Object> ok(Object data){Map<String,Object>r=new LinkedHashMap<>();r.put("success",true);r.put("data",data);return r;}
     private Map<String,Object> kv(Object... arr){Map<String,Object>m=new LinkedHashMap<>();for(int i=0;i<arr.length;i+=2)m.put(String.valueOf(arr[i]),arr[i+1]);return m;}
-    private void req(Object v,String n){if(v==null||(v instanceof String s&&!StringUtils.hasText(s)))throw new BizException(n+"涓嶈兘涓虹┖");}
+    private void req(Object v,String n){if(v==null||(v instanceof String s&&!StringUtils.hasText(s)))throw new BizException(n+"不能为空");}
     private Timestamp ts(LocalDateTime v){return v==null?null:Timestamp.valueOf(v);}    
-    private LocalDateTime dt(String v,String f){if(!StringUtils.hasText(v))return null;try{return LocalDateTime.parse(v.trim());}catch(DateTimeParseException e){try{return LocalDateTime.parse(v.trim(),SPACE);}catch(DateTimeParseException ex){throw new BizException(f+"鏃堕棿鏍煎紡閿欒锛屾敮鎸?yyyy-MM-ddTHH:mm:ss 鎴?yyyy-MM-dd HH:mm:ss");}}}
+    private LocalDateTime dt(String v,String f){if(!StringUtils.hasText(v))return null;try{return LocalDateTime.parse(v.trim());}catch(DateTimeParseException e){try{return LocalDateTime.parse(v.trim(),SPACE);}catch(DateTimeParseException ex){throw new BizException(f+"时间格式错误，支持: yyyy-MM-ddTHH:mm:ss 或 yyyy-MM-dd HH:mm:ss");}}}
     private String s(Object v){return v==null?null:String.valueOf(v);}    
     private BigDecimal dec(Object v){if(v==null)return BigDecimal.ZERO; if(v instanceof BigDecimal bd)return bd; return new BigDecimal(String.valueOf(v));}
     private void ensureTable(String t){Integer c=jdbcTemplate.queryForObject("SELECT COUNT(1) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?",Integer.class,t);if(c==null||c==0)throw new BizException("本地数据库缺少表 "+t+"，请先执行LW.sql同步数据库结构");}
